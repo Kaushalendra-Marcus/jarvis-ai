@@ -1,0 +1,335 @@
+# Architecture
+
+Aurviz is an Android app (Kotlin, Jetpack Compose) plus a small Node.js backend. This document explains how the pieces fit together, why they are separated the way they are, and how to extend the system.
+
+## 1. System context
+
+```mermaid
+flowchart LR
+    User([User]) -- voice / text --> App[Aurviz Android app]
+    App -- reasoning --> Gemini[(Gemini API)]
+    App -- OAuth session, mail API --> Backend[Aurviz backend<br/>Node.js + PostgreSQL]
+    Backend -- Gmail API --> Gmail[(Gmail)]
+    App -- WorkManager --> OS[Android OS<br/>background execution]
+    App -- HTTPS pages --> Web[(Public web)]
+    App -. demo mailbox .-> Demo[Built-in sample mailbox]
+    Backend -. test account .-> Shared[(Throwaway test Gmail<br/>restricted sending)]
+```
+
+## 2. Three separate concerns
+
+The most important design decision: **thinking, doing and timing are three different things owned by three different components.**
+
+| Concern | Owner | Where in code |
+|---|---|---|
+| Reasoning: decide the next step | Gemini via function calling | `GeminiAgentClient`, prompt in `AgentOrchestrator` |
+| Execution: perform the operation | Kotlin `AgentTool`s and the backend | `data/tools/*`, `backend/src/routes/*` |
+| Scheduling: run later | Android WorkManager (persists its own state) | `TaskSchedulerRepositoryImpl`, `ScheduledTaskWorker` |
+
+Gemini cannot wake an app. A scheduled task is stored in Room and registered with WorkManager. When WorkManager runs the worker, the worker calls the same agent loop in **background mode**, which has stricter safety rules (see section 6).
+
+## 3. Layers of the Android app
+
+```mermaid
+flowchart TB
+    subgraph Presentation["presentation (Jetpack Compose)"]
+      UI[Agent / Memory / Tasks / Settings / Browser / Onboarding]
+      VM[ViewModels]
+    end
+    subgraph Domain["domain (pure Kotlin, unit-tested)"]
+      ORCH[AgentOrchestrator]
+      TOOLS[AgentTool + ToolRegistry]
+      MAIL[MailService / MailGateway]
+      MODELS[Models, ExecutionLogFormatter]
+      METRICS[PerformanceRecorder]
+    end
+    subgraph Data["data"]
+      GEM[GeminiAgentClient]
+      BM[BackendMailService]
+      DM[DemoMailService]
+      ROOM[(Room database)]
+      REPO[Repositories]
+    end
+    subgraph Services["service"]
+      WORK[ScheduledTaskWorker]
+      VOICE[VoiceManager]
+      WEB[BrowserAgentController, BrowserStore]
+    end
+    UI --> VM --> ORCH
+    ORCH --> TOOLS --> MAIL
+    ORCH --> GEM
+    MAIL --> BM
+    MAIL --> DM
+    TOOLS --> REPO --> ROOM
+    WORK --> ORCH
+    VM --> VOICE
+    TOOLS --> WEB
+    ORCH --> METRICS --> ROOM
+```
+
+Rules that keep it maintainable:
+
+- `domain` never imports Android UI classes, so the orchestrator is covered by plain JVM tests with fake clients.
+- Tools depend on interfaces (`MailService`, repositories), not on concrete networking classes.
+- The UI observes `StateFlow`s and holds no business logic.
+
+## 4. The agent loop
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant O as AgentOrchestrator
+    participant G as Gemini
+    participant T as Tool
+    U->>O: "Check my emails, find interview invitations, summarize"
+    O->>O: build context (time, saved memories, last 12 messages)
+    loop at most 8 steps
+        O->>G: history + tool declarations
+        G-->>O: function call, or final text
+        alt tool call
+            O->>T: execute(arguments)
+            T-->>O: observation (result or error)
+            Note over O: result is added to the history
+        else final answer
+            O-->>U: rendered reply
+        end
+    end
+```
+
+Behaviours worth knowing:
+
+- **Planning rules** are in the system instruction: one tool at a time, search then read then summarize, draft versus send, ask when the recipient is ambiguous, never invent mail content.
+- **Memory** (lexical match plus the most recent entries) is injected on every turn, so a saved preference like "formal emails" affects later drafts.
+- **Step limit:** a request cannot loop forever. Reaching the limit shows an explicit message with a retry action.
+- **Empty answers:** if the model returns no real text (for example a lone dash) the orchestrator asks once more, then falls back to a retryable error.
+- **Attachments:** the browser and share-intent can pass page or text content to the model. It is sent only for the action the user triggered and is marked as untrusted data, which reduces prompt-injection risk.
+
+### 4.1 Voice-to-action pipeline
+
+Voice and text share one path. Speech is converted to text on the device, then the same agent loop runs.
+
+```mermaid
+flowchart LR
+    M([Microphone tap]) --> SR[Android SpeechRecognizer<br/>free-form, partial results]
+    SR -- partial text --> UI[Live transcript overlay]
+    SR -- final text --> VM[AgentViewModel.sendPrompt<br/>isVoice = true]
+    T([Typed text]) --> VM
+    VM --> O[AgentOrchestrator]
+    O --> G[Gemini plans, calls tools]
+    G --> X[Tools execute]
+    X --> R[Reply + tool cards]
+    R --> TTS[TextToSpeech<br/>if Spoken replies is on]
+```
+
+1. **Capture:** `VoiceManager` starts `SpeechRecognizer` with `LANGUAGE_MODEL_FREE_FORM` and partial results. The microphone permission is requested at launch, and a missing recognizer is handled without crashing.
+2. **Feedback:** partial results and the audio level drive an animated overlay, so the user sees what was heard.
+3. **Hand-off:** the final transcript is sent with `isVoiceInput = true`, so the chat labels the message "Voice". From here voice and typing are identical.
+4. **Plan and act:** the orchestrator runs the reason, act, observe loop (section 4) and shows each tool as a card.
+5. **Report:** the answer is rendered, and spoken aloud through `TextToSpeech` when "Spoken replies" is enabled. A stop button interrupts speech.
+
+Speech recognition is on-device or platform-provided; only the resulting text goes to Gemini, never audio.
+
+### 4.2 Memory storage and retrieval
+
+| Aspect | Design |
+|---|---|
+| Storage | Room table `memories` (key, content, category, importance, createdAt). Survives restarts and app updates through an explicit migration |
+| Writing | The agent's `manage_memory` tool (save, update, delete) or the Memory screen (add, edit, delete with confirmation). Saving an existing key updates it instead of duplicating |
+| Retrieval | `AgentOrchestrator.memoryContextFor(prompt)`: tokenize the prompt, drop stop-words, run a SQL `LIKE` search per term across key, content and category (ordered by importance, then recency), then add the 4 most recent memories so general preferences always apply |
+| Injection | The top results (at most 8) go into the system instruction as "Known user context and saved preferences (apply them)" on **every** turn, including background runs |
+| Safety | Update and delete act only on one unambiguous match; otherwise the agent receives the candidates and must ask the user |
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant O as Orchestrator
+    participant D as Room memories
+    participant G as Gemini
+    U->>O: "Draft an email to my professor"
+    O->>D: search terms (draft, email, professor) + recent 4
+    D-->>O: "email_tone: I prefer formal emails" ...
+    O->>G: system instruction includes the memories
+    G-->>O: formal draft (preference applied without being asked)
+```
+
+Why lexical search: it is fast (about 54 ms median measured), private (nothing leaves the phone for retrieval) and needs no model download. Its limit is that it matches words, not meaning, so a vector index is the natural upgrade.
+
+## 5. Tools and the approval gate
+
+| Tool | Side effect | Needs approval |
+|---|---|---|
+| `search_emails`, `read_email` | none | no |
+| `create_email_draft` | saves a draft, sends nothing | no |
+| `send_email` | sends mail | **yes** |
+| `manage_memory` (save, recall, update, delete) | local data | no |
+| `schedule_task` | registers a background job | no |
+| `browse_web`, `open_url`, `read_page`, `scroll_page`, `extract_links`, `navigate_*` | none | no |
+| `click_element`, `enter_text` | can change a web page | **yes** |
+
+A tool marked `isSensitive` pauses the loop and shows an editable confirmation dialog. Only approval calls `executeConfirmed`. In background runs a sensitive tool is never executed at all; the model is told it was blocked and returns a draft or summary instead.
+
+## 6. Scheduled tasks
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant R as Room
+    participant W as WorkManager
+    participant K as ScheduledTaskWorker
+    participant O as AgentOrchestrator
+    U->>A: "Every morning at 9 AM, summarize my important emails"
+    A->>R: store task (instruction, time, recurring)
+    A->>W: enqueue unique periodic work (network required)
+    Note over W: persists across app restarts and reboots
+    W->>K: run at about 09:00 (Android may delay)
+    K->>K: offline? skip and retry later
+    K->>O: executeAutonomousTask(instruction)
+    O-->>K: Success / Failure(retryable?)
+    K->>R: update task status + write history row
+    K-->>U: notification
+```
+
+<table>
+<tr>
+<td align="center"><img src="screenshots/41-weekday-task-card.png" width="230"><br><sub>A weekday task after it ran at 17:14: next run is Monday</sub></td>
+</tr>
+</table>
+
+Reliability rules:
+
+- **Cron-like scheduling.** The model turns a sentence into a `recurrence` and a time: `daily`, `weekdays`, `weekends`, day names (`MON,THU`), `once`, or a full 5-field cron expression (`0 9 * * 1-5`). `CronSchedule` (pure Kotlin) parses the expression, supports `*`, lists, ranges, steps and `JAN-DEC` / `SUN-SAT` names, and computes the next run time (classic cron rule: if day-of-month and day-of-week are both set, either may match). The expression is stored with the task and shown as plain words, for example "Weekdays at 09:00".
+- **A chain of exact one-time jobs, not a 24-hour periodic job.** A periodic WorkManager job can only repeat at a fixed interval, so it cannot express "weekdays". Instead each recurring task keeps one delayed one-time job. When a run finishes (not retrying), the worker computes the next occurrence from the cron expression and queues it (`APPEND_OR_REPLACE`, so it never cancels itself). At app start `ensureScheduled()` re-queues any task whose chain is missing and migrates tasks created by older builds (`daily_at_HH:MM`). Manual "Run now" never moves the schedule, and a paused task does not queue a next run.
+- Android may still start a job a few minutes late under battery optimization, and a run missed while the phone was off is not replayed; the next occurrence is scheduled instead.
+- Unique work names (`task_<id>`, `task_<id>_manual`) stop duplicate enqueues; an in-process guard drops a concurrent second run.
+- A run is **never reported as success** if a required tool failed. Transient failures (offline, rate limit, tool outage) are retried with exponential backoff up to 3 attempts and shown as "Retrying".
+- Pause cancels the WorkManager job but keeps the task; resume re-registers it. A run that was already in flight never silently resumes a paused task.
+- Every attempt is stored in `task_executions` and shown in Tasks, History. Raw errors are translated by `ExecutionLogFormatter` into a plain explanation with a next step.
+
+## 7. Mail: three mailboxes, one interface
+
+The Gmail tools only know the `MailService` interface. A `MailGateway` chooses the implementation on every call, so switching mailbox takes effect instantly.
+
+```mermaid
+flowchart LR
+    T[Gmail tools: search, read, draft, send] --> G{MailGateway}
+    G -- Test account or My own Gmail --> B[BackendMailService]
+    G -- Demo mailbox --> D[DemoMailService]
+    B --> API[Aurviz backend REST]
+    API --> GM[(Gmail API)]
+    D --> S[(Sample inbox + drafts + sent<br/>persisted on the phone)]
+    V[Demo mailbox viewer] --> G
+    G -- revision signal --> V
+```
+
+| Source | Where the mail lives | Credentials | Notes |
+|---|---|---|---|
+| **Test Gmail account** (default) | A throwaway Gmail account | Email and password are shown in the app; the reviewer signs in on Google's page | Sends only to itself or example.com addresses; cannot be disconnected |
+| **My own Gmail** | The user's Google account | Google sign-in (OAuth) | Account must be an OAuth test user until the app is verified |
+| **Demo mailbox** | App-private storage on the phone | None | Ten sample emails; drafts and sent mail persist; **Reset** restores the sample |
+
+### Reviewer sign-in flow (test account)
+
+```mermaid
+sequenceDiagram
+    participant R as Reviewer
+    participant App
+    participant Chrome as Browser
+    participant Backend
+    participant Google
+    R->>App: Settings, Mailbox, Test Gmail account (email + password shown, copy buttons, 6 steps)
+    R->>App: tap "Sign in with Google"
+    App->>Chrome: open /auth/google
+    Chrome->>Google: consent (reviewer pastes email + password on Google's page)
+    Google-->>Backend: authorization code
+    Backend->>Backend: encrypt refresh token (AES-256-GCM)
+    Backend-->>App: aurviz://oauth/callback?code=ONE_TIME_CODE
+    App->>Backend: POST /auth/exchange
+    Backend-->>App: session token
+    App-->>R: "Connected as adityatesting404@gmail.com"
+```
+
+The credentials are typed only on Google's own page, never into Aurviz. The email is public; the password is injected at build time from the git-ignored `local.properties`, so it is shown in the APK but never committed to the repository. The server enforces the safeguards, so they cannot be bypassed by a modified app: `POST /emails/send` and `/emails/scheduled` reject any recipient other than the test account itself or a reserved example address (`example.com`, `.org`, `.net`, `*.example`, `*.test`) with 403, and `DELETE /auth/google` is refused for that account.
+
+### The demo mailbox viewer
+One screen shows the demo mailbox with **Inbox, Sent and Drafts** tabs. When Aurviz saves a draft or sends mail, the gateway raises a `revision` signal and the viewer reloads, so the screen **updates live**. Real accounts are viewed in Gmail itself. Opening a message offers "Summarize with Aurviz", which passes the message to the agent as untrusted context.
+
+Real accounts use OAuth through the backend:
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Browser
+    participant Backend
+    participant Google
+    App->>Browser: open /auth/google
+    Browser->>Google: consent screen (send, read, compose)
+    Google-->>Backend: authorization code
+    Backend->>Google: exchange code, receive refresh token
+    Backend->>Backend: encrypt refresh token (AES-256-GCM), store
+    Backend-->>App: aurviz://oauth/callback?code=ONE_TIME_CODE
+    App->>Backend: POST /auth/exchange (one-time code)
+    Backend-->>App: opaque session token (only its hash is stored)
+```
+
+The app never sees a Google password or refresh token. Because the refresh token lives on the server, scheduled email summaries work while the phone is idle.
+
+## 8. Web browser
+
+`BrowserAgentController` is a single shared session between the agent's browser tools and the visible WebView. People get an address bar that searches when you type words, find in page, reader view, desktop site, text size, bookmarks, history and share. Four AI actions (Summarize, Key facts, Explain simply, Ask) read the page text and hand it to the agent.
+
+Safety: HTTPS only; private, local and link-local addresses are rejected (DNS is resolved for agent opens); no JavaScript bridge to the app; file and content access disabled; Safe Browsing on; clicks and typing by the agent need approval and never submit forms. This is a controlled WebView, not a hardened sandbox.
+
+## 9. Data
+
+| Store | Technology | Content |
+|---|---|---|
+| `memories` | Room | key, content, category, timestamp |
+| `scheduled_tasks` | Room | instruction, schedule, enabled, last status |
+| `task_executions` | Room | per-run status, message, duration, attempt (500 rows kept) |
+| `performance_samples` | Room | latency samples (1000 rows kept) |
+| Chat | JSON file | last 100 messages |
+| Secrets | EncryptedSharedPreferences | Gemini key, session token |
+| Preferences | SharedPreferences | theme, mailbox source, onboarding |
+| Demo mailbox | SharedPreferences (JSON) | user-created drafts and sent mail |
+| Server | PostgreSQL + Prisma, pg-boss | accounts (encrypted token), sessions (hashed), scheduled emails, history, job queue |
+
+Database upgrades use explicit migrations (`MIGRATION_1_2`), so memories and tasks are never wiped on update.
+
+## 10. Security
+
+| Threat | Mitigation |
+|---|---|
+| Stolen credentials | No passwords; OAuth with server-held refresh token (AES-256-GCM) |
+| Token on device | Keystore-backed encrypted preferences, excluded from backup |
+| Unwanted sending | Approval dialog for every send; background runs cannot send |
+| Abuse of the shared test account | Server-enforced: sends only to itself or example addresses, no disconnect, throwaway account |
+| Header injection in mail | Recipient and subject reject line breaks (app and server) |
+| Replay or double send | Idempotency key per request; unique database constraint |
+| Abuse of the API | Rate limiting, Helmet headers, 32 KB body limit, schema validation |
+| Malicious web content | HTTPS only, private-address blocking, no JS bridge, content treated as untrusted data |
+| Secrets in source | None committed; build-time Gemini key is read from the git-ignored `local.properties` |
+
+Known limit: a Gemini key bundled into an APK can be extracted from the file. For production, route Gemini through the backend with quotas.
+
+## 11. Extending Aurviz
+
+Adding a capability, for example Google Calendar, needs **no change to the orchestrator**:
+
+1. Implement `AgentTool` (and a backend route if it needs Google credentials).
+2. Add its function declaration in `GeminiAgentClient`.
+3. Register it in `AurvizApp`.
+4. Set `isSensitive = true` if it has external side effects: it then automatically gets the approval gate and is blocked in background runs.
+
+Swapping the mail provider means implementing `MailService` once; the tools and orchestrator are untouched, which is exactly how the demo mailbox was added.
+
+## 12. Decisions and trade-offs
+
+| Decision | Reason | Trade-off |
+|---|---|---|
+| Backend holds Google tokens | Scheduled mail works while the app is closed; no tokens on the phone | Needs a hosted service; free tier can sleep (the app warms it up and allows a long first request) |
+| Gemini function calling | Reliable structured tool use | Depends on the model API; fallback chain mitigates model retirement |
+| WorkManager for scheduling | Persistent, battery-aware | Not exact to the minute |
+| Lexical memory search | Simple, fast, private | Not semantic; a vector index is a possible upgrade |
+| Demo mailbox | Lets anyone evaluate without credentials | Sample data only |
+| Test Gmail account | Reviewers use real Gmail with credentials shown in the app | Google may challenge a shared account; publish the consent screen so sign-in is not blocked, and keep the demo mailbox as a fallback |

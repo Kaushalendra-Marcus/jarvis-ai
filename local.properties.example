@@ -1,0 +1,11 @@
+## Copy this file to `local.properties` (it is git-ignored). NEVER commit the real file.
+
+sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+
+# Optional: bundle a Gemini API key into the APK so reviewers need no setup.
+# Get a free key at https://aistudio.google.com/ . A key typed in the app (Settings, AI model) overrides it.
+gemini.api.key=
+
+# Optional: the reviewer test account shown inside the app (Settings, Mailbox).
+test.account.email=adityatesting404@gmail.com
+test.account.password=
