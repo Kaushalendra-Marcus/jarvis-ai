@@ -1,10 +1,11 @@
 {
-  "name": "aurviz-agent-backend",
+  "name": "lumo-agent-backend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.12" },
   "scripts": {
+    "build": "prisma generate",
     "dev": "node --watch --env-file=.env src/index.js",
     "start": "node --env-file=.env src/index.js",
     "start:api": "ROLE=api node --env-file=.env src/index.js",

@@ -1,1 +1,1 @@
-export const EMAIL_QUEUE = "aurviz-send-email";
+export const EMAIL_QUEUE = "lumo-send-email";

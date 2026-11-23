@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon best practice: pooled URL for runtime, direct (unpooled) URL for migrations.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum ScheduledEmailStatus {

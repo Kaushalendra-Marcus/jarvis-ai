@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">Aurviz</string>
+    <string name="app_name">Jarvis</string>
     <string name="shortcut_voice_short">Voice command</string>
-    <string name="shortcut_voice_long">Speak a command to Aurviz</string>
+    <string name="shortcut_voice_long">Speak a command to Jarvis</string>
     <string name="shortcut_inbox_short">Summarize inbox</string>
     <string name="shortcut_inbox_long">Summarize my important emails</string>
     <string name="shortcut_tasks_short">Tasks</string>

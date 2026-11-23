@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Share/nodes icon · converted from provided 64px SVG · fill can be tinted via Icon(tint=...) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="64" android:viewportHeight="64">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M45,7 A8,8 0 0 0 38.91,20.17 L33.28,29.12 L21.71,29.89 A8,8 0 0 0 14,24 A8,8 0 0 0 14,40 A8,8 0 0 0 21.71,34.11 L33.28,34.88 L38.91,43.83 A8,8 0 0 0 45,57 A8,8 0 0 0 45,41 A8,8 0 0 0 42.55,41.39 L38.29,32 L42.55,22.61 A8,8 0 0 0 45,23 A8,8 0 0 0 45,7 Z" />
+</vector>

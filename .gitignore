@@ -17,3 +17,6 @@
 local.properties
 *.apk
 *.aab
+.neon
+node_modules/
+.env.local

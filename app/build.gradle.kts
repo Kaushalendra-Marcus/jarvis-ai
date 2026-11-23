@@ -10,6 +10,9 @@ val bundledGeminiKey: String = (localProperties.getProperty("gemini.api.key") ?:
 // Reviewer test account shown inside the app. The password lives only in the git-ignored local.properties.
 val testAccountEmail: String = (localProperties.getProperty("test.account.email") ?: "adityatesting404@gmail.com").trim()
 val testAccountPassword: String = (localProperties.getProperty("test.account.password") ?: "").trim()
+// Optional Mem0 semantic memory (Room remains offline source of truth when blank).
+val mem0ApiKeyDefault: String = (localProperties.getProperty("mem0.api.key") ?: "").trim()
+val mem0UserIdDefault: String = (localProperties.getProperty("mem0.user.id") ?: "jarvis-android-user").trim()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,15 +22,17 @@ plugins {
 }
 
 android {
-    namespace = "com.aurviz.agent"
+    namespace = "ai.lumo.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aurviz.agent"
+        applicationId = "ai.lumo.app"
         buildConfigField("String", "GEMINI_API_KEY_DEFAULT", "\"$bundledGeminiKey\"")
         buildConfigField("String", "TEST_ACCOUNT_EMAIL", "\"$testAccountEmail\"")
         buildConfigField("String", "TEST_ACCOUNT_PASSWORD", "\"${testAccountPassword.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://aurviz-backend.onrender.com\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://lumo-backend.onrender.com\"")
+        buildConfigField("String", "MEM0_API_KEY_DEFAULT", "\"$mem0ApiKeyDefault\"")
+        buildConfigField("String", "MEM0_USER_ID_DEFAULT", "\"$mem0UserIdDefault\"")
         // Stable Gemini model used by every AI request. Update here only.
         buildConfigField("String", "GEMINI_MODEL", "\"gemini-3.5-flash-lite\"")
         minSdk = 26
@@ -44,7 +49,7 @@ android {
 
     buildTypes {
         release {
-            resValue("string", "shortcut_package", "com.aurviz.agent")
+            resValue("string", "shortcut_package", "ai.lumo.app")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -53,7 +58,7 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
-            resValue("string", "shortcut_package", "com.aurviz.agent.debug")
+            resValue("string", "shortcut_package", "ai.lumo.app.debug")
             isDebuggable = true
         }
     }

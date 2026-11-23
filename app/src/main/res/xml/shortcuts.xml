@@ -3,37 +3,37 @@
     <shortcut
         android:shortcutId="voice"
         android:enabled="true"
-        android:icon="@drawable/ic_shortcut_mic"
+        android:icon="@drawable/ic_orb_mic"
         android:shortcutShortLabel="@string/shortcut_voice_short"
         android:shortcutLongLabel="@string/shortcut_voice_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="aurviz://shortcut/voice"
-            android:targetClass="com.aurviz.agent.MainActivity"
+            android:data="lumo://shortcut/voice"
+            android:targetClass="ai.lumo.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
     <shortcut
         android:shortcutId="inbox"
         android:enabled="true"
-        android:icon="@drawable/ic_shortcut_mail"
+        android:icon="@drawable/ic_orb_inbox"
         android:shortcutShortLabel="@string/shortcut_inbox_short"
         android:shortcutLongLabel="@string/shortcut_inbox_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="aurviz://shortcut/inbox"
-            android:targetClass="com.aurviz.agent.MainActivity"
+            android:data="lumo://shortcut/inbox"
+            android:targetClass="ai.lumo.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
     <shortcut
         android:shortcutId="tasks"
         android:enabled="true"
-        android:icon="@drawable/ic_shortcut_tasks"
+        android:icon="@drawable/ic_orb_routine"
         android:shortcutShortLabel="@string/shortcut_tasks_short"
         android:shortcutLongLabel="@string/shortcut_tasks_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="aurviz://shortcut/tasks"
-            android:targetClass="com.aurviz.agent.MainActivity"
+            android:data="lumo://shortcut/tasks"
+            android:targetClass="ai.lumo.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
 </shortcuts>

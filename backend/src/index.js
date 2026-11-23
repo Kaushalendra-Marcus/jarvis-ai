@@ -39,7 +39,7 @@ app.use(rateLimit({
 const sessionPool = new Pool({ connectionString: env.databaseUrl, max: 5 });
 const PgSessionStore = connectPgSimple(session);
 app.use(session({
-  name: "aurviz.oauth",
+  name: "lumo.oauth",
   store: new PgSessionStore({ pool: sessionPool, createTableIfMissing: true, tableName: "oauth_sessions" }),
   secret: env.sessionSecret,
   resave: false,
@@ -102,7 +102,7 @@ async function main() {
   boss = new PgBoss({
     connectionString: env.databaseUrl,
     schema: "pgboss",
-    application_name: "aurviz-backend"
+    application_name: "lumo-backend"
   });
   boss.on("error", error => console.error("Persistent job queue error", { code: error?.code ?? "QUEUE_ERROR" }));
   await boss.start();
@@ -116,7 +116,7 @@ async function main() {
   if (env.role === "all" || env.role === "api") {
     app.locals.boss = boss;
     server = app.listen(env.port, "0.0.0.0", () => {
-      console.info(`Aurviz API listening on port ${env.port} (${env.role}).`);
+      console.info(`Lumo API listening on port ${env.port} (${env.role}).`);
     });
   }
 }

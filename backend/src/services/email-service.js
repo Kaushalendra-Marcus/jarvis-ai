@@ -198,7 +198,7 @@ export async function processEmailJob(boss, job) {
 
   try {
     const { gmail, flushTokenUpdate } = await createGmailClient(email.accountId);
-    const stableMessageId = `<${email.idempotencyKey.replace(/[^a-zA-Z0-9._-]/g, ".")}@aurviz>`;
+    const stableMessageId = `<${email.idempotencyKey.replace(/[^a-zA-Z0-9._-]/g, ".")}@jarvis-ai>`;
     const raw = Buffer.from([
       `To: ${email.recipient}`,
       `Subject: =?UTF-8?B?${Buffer.from(email.subject).toString("base64")}?=`,
