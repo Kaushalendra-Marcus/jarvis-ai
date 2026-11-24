@@ -18,10 +18,10 @@ internal val JarvisShadow = Color(0xFF2E4D6A)
 // FoldingParticleShell accent for the speck field.
 internal val JarvisSpeck = Color(0xFFC9C7DA)
 
-internal val MidnightBg = Color(0xFF060A13)
-internal val MidnightStage = Color(0xFF0B1220)
-internal val MidnightCard = Color(0xFF101A2E)
-internal val MidnightCardAlt = Color(0xFF14213A)
+internal val MidnightBg = Color(0xFF000000)
+internal val MidnightStage = Color(0xFF05070D)
+internal val MidnightCard = Color(0xFF0B1220)
+internal val MidnightCardAlt = Color(0xFF101A2E)
 internal val MidnightLine = Color(0xFF1E2C48)
 
 internal val LimePop = JarvisPrimary

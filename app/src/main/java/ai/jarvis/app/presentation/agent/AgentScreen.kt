@@ -343,14 +343,13 @@ fun AgentScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                     IconButton(
-                                        onClick = { dismissedReplyId = voiceReply.id },
-                                        modifier = Modifier.size(24.dp)
+                                        onClick = { dismissedReplyId = voiceReply.id }
                                     ) {
                                         Icon(
                                             Icons.Default.Close,
                                             contentDescription = "Dismiss",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(15.dp)
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
                                 }
