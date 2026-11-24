@@ -19,7 +19,9 @@ data class CatalogApp(
     /** Vendor authorization hub opened in-app by the Authorize button. */
     val authUrl: String = "",
     /** Prefilled server URL hint for the guided setup. */
-    val serverHint: String = ""
+    val serverHint: String = "",
+    /** True when this catalog app needs an API token pasted (browser login alone grants nothing). */
+    val needsToken: Boolean = false
 )
 
 val TOP_APPS = listOf(
@@ -62,7 +64,8 @@ val TOP_APPS = listOf(
         "Read pages and file notes where you keep them.",
         R.drawable.ic_brand_notion, CatalogKind.CUSTOM_SOON
     ,
-        authUrl = "https://www.notion.so/login"),
+        authUrl = "https://www.notion.so/my-account/integrations",
+        needsToken = true),
     CatalogApp(
         "spotify", "Spotify",
         "Queue playlists and control playback by voice.",

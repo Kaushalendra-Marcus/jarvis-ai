@@ -44,4 +44,10 @@ interface IntegrationRegistry {
     suspend fun catalogToken(appId: String): String
 
     /** Stores/rotates the API token for a connected catalog app. */
-    suspend fun updateCatalogToken(appId: String, token: String): Result<Unit>}
+    suspend fun updateCatalogToken(appId: String, token: String): Result<Unit>
+
+    /**
+     * Proves the saved token works right now (e.g. Notion workspace reachability).
+     * Returns a short human line like "Token works — workspace visible."
+     */
+    suspend fun validateCatalogToken(appId: String): Result<String>}

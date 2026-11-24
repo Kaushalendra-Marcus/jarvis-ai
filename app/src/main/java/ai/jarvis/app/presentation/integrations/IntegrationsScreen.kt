@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -195,11 +196,24 @@ fun IntegrationsScreen(
             onDisconnectGmail = { scope.launch { registry.disconnect("gmail"); refresh(); selected = null } },
             onAuthorize = { url -> onAuthorizeApp(url) },
             onConfirmConnected = { serverUrl, token ->
-                scope.launch {
-                    runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl, token.trim()) }
-                        .onSuccess { selected = null; refresh() }
-                        .onFailure { error = it.message }
-                }
+                runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl, token.trim()) }
+                    .fold(
+                        onSuccess = {
+                            if (!app.needsToken) return@fold null
+                            registry.validateCatalogToken(app.id).fold(
+                                onSuccess = { null },
+                                onFailure = { v ->
+                                    runCatching { registry.removeCustom(app.id) }
+                                    v.message ?: "Validation failed."
+                                }
+                            )
+                        },
+                        onFailure = { it.message ?: "Could not save the connection." }
+                    ).also { if (it == null) refresh() }
+            },
+            onConfirmed = {
+                selected = null
+                refresh()
             },
             onDisconnectApp = { scope.launch { registry.removeCustom(app.id); refresh(); selected = null } },
             onOpenGuide = { selected = null; showGuide = true }
@@ -324,12 +338,16 @@ private fun AppDetailSheet(
     onConnectGmail: () -> Unit,
     onDisconnectGmail: () -> Unit,
     onAuthorize: (String) -> Unit,
-    onConfirmConnected: (serverUrl: String, token: String) -> Unit,
+    onConfirmConnected: suspend (serverUrl: String, token: String) -> String?,
+    onConfirmed: () -> Unit,
     onDisconnectApp: () -> Unit,
     onOpenGuide: () -> Unit
 ) {
     var serverUrl by remember(app.id) { mutableStateOf(app.serverHint) }
     var apiToken by remember(app.id) { mutableStateOf("") }
+    var checking by remember(app.id) { mutableStateOf(false) }
+    var tokenError by remember(app.id) { mutableStateOf<String?>(null) }
+    val sheetScope = rememberCoroutineScope()
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
@@ -378,6 +396,14 @@ private fun AppDetailSheet(
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = onDisconnectApp, modifier = Modifier.fillMaxWidth()) { Text("Disconnect") }
                     } else {
+                        if (app.needsToken) {
+                            Text(
+                                "Browser login alone grants nothing — Notion's API needs its own token.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = WarningOrange,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                         OutlinedTextField(
                             value = serverUrl,
                             onValueChange = { serverUrl = it },
@@ -388,25 +414,49 @@ private fun AppDetailSheet(
                         )
                         OutlinedTextField(
                             value = apiToken,
-                            onValueChange = { apiToken = it },
+                            onValueChange = { apiToken = it; tokenError = null },
                             label = { Text("API token (for apps like Notion) — secret_…") },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+                        tokenError?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                        }
                         Button(
                             onClick = { onAuthorize(app.authUrl.ifBlank { serverUrl.trim() }) },
-                            enabled = app.authUrl.isNotBlank() || serverUrl.trim().startsWith("https://"),
+                            enabled = !checking && (app.authUrl.isNotBlank() || serverUrl.trim().startsWith("https://")),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Authorize ${app.name}") }
                         Text(
-                            "Opens ${app.name}'s authorization page here in Jarvis. Sign in, come back, then confirm below.",
+                            if (app.needsToken) "1 Authorize opens Integrations  2 New integration  3 Paste the token above, then confirm."
+                            else "Opens ${app.name}'s authorization page here in Jarvis. Sign in, come back, then confirm below.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        OutlinedButton(onClick = { onConfirmConnected(serverUrl, apiToken) }, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                if (app.needsToken && apiToken.trim().isBlank()) {
+                                    tokenError = "Paste the token — browser login alone doesn't grant access."
+                                } else {
+                                    sheetScope.launch {
+                                        checking = true
+                                        tokenError = null
+                                        tokenError = onConfirmConnected(serverUrl, apiToken)
+                                        checking = false
+                                        if (tokenError == null) onConfirmed()
+                                    }
+                                }
+                            },
+                            enabled = !checking,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (checking) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                            }
                             Text("I've authorized → Connect")
                         }
                     }

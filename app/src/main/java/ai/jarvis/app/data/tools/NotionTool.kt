@@ -201,6 +201,29 @@ class NotionTool(
 
     private fun failure(message: String) = ToolExecutionResponse(name, false, message)
 
+    /**
+     * Proves a token works right now: returns how many pages are visible,
+     * or a plain-language reason it doesn't.
+     */
+    suspend fun probe(token: String): Result<Int> = runCatching {
+        val clean = token.trim()
+        require(clean.startsWith("secret_") || clean.startsWith("ntn_")) {
+            "That token looks wrong — paste the Internal Integration Token (starts with secret_)."
+        }
+        val res = post(clean, "search", JSONObject().put("page_size", 1))
+        (res.optJSONArray("results")?.length() ?: 0) to res.optBoolean("has_more", false)
+    }.map { (count, more) -> if (more) count + 1 else count }
+        .recoverCatching { error ->
+            throw IllegalStateException(
+                when (error.message) {
+                    "UNAUTHENTICATED" -> "Notion rejected that token. Check it in Notion → Settings → Integrations."
+                    "RATE_LIMITED" -> "Notion rate limit hit. Try again in a moment."
+                    else -> if (error is java.io.IOException) "Could not reach Notion. Check your connection."
+                    else (error.message ?: "Validation failed.")
+                }
+            )
+        }
+
     private companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
 

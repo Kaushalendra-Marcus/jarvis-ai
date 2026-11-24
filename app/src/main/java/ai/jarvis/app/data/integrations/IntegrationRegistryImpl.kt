@@ -4,6 +4,7 @@ import ai.jarvis.app.domain.integrations.IntegrationDescriptor
 import ai.jarvis.app.domain.integrations.IntegrationRegistry
 import ai.jarvis.app.domain.integrations.IntegrationStatus
 import ai.jarvis.app.domain.tool.AgentTool
+import ai.jarvis.app.data.tools.NotionTool
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -168,6 +169,20 @@ class IntegrationRegistryImpl(
         }
         saved[appId] = current.copy(token = clean)
         persist()
+    }
+
+    override suspend fun validateCatalogToken(appId: String): Result<String> = runCatching {
+        val token = saved[appId]?.token.orEmpty()
+        require(token.isNotBlank()) { "No token saved for $appId yet." }
+        when (appId) {
+            "notion" -> {
+                val probe = NotionTool(tokenProvider = { token }).probe(token)
+                val visible = probe.getOrThrow()
+                if (visible > 0) "Token works — your workspace pages are visible."
+                else "Token works, but no pages are shared with the integration yet. Share a page with it in Notion."
+            }
+            else -> throw IllegalStateException("No validator for $appId.")
+        }
     }
 
     override suspend fun removeCustom(id: String): Result<Unit> = runCatching {
