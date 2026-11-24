@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build": "npm --prefix backend install --include=dev && npm --prefix backend run build",
+    "start": "npm --prefix backend run start:prod"
+  },
   "dependencies": {
     "@neon/config": "^1.14.6",
     "@neon/env": "^2.1.9"
