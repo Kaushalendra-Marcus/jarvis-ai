@@ -294,7 +294,7 @@ fun OrbVoiceVisualizer(
                 val fold = 0.55f + 0.45f * (0.5f + 0.5f * sin(time * (0.6f + h3) + i * 1.7f)) * (0.6f + 0.4f * crumple)
                 val rr = r * fold * spread * (0.9f + 0.2f * h2)
                 val p = Offset(c.x + cos(ang) * rr, c.y + sin(ang) * rr * 0.92f)
-                val bright = (0.25f + 0.75f * h3) * (0.5f + 0.5f * pulse2 + level * 0.5f)
+                val bright = ((0.25f + 0.75f * h3) * (0.5f + 0.5f * pulse2 + level * 0.5f)).coerceIn(0f, 1f)
                 val col = when {
                     i % 5 == 0 -> JarvisEye
                     i % 3 == 0 -> dotColorBottom
