@@ -3,7 +3,7 @@
 Premium personal AI agent for Android + Node.js backend. Voice/text → reasoning → tools → completion.
 
 ## Branding
-- Name: **JARVIS AI**, package kept as `ai.lumo.app` to avoid migration (Req.1)
+- Name: **JARVIS AI**, package kept as `ai.jarvis.app` to avoid migration (Req.1)
 - Theme: midnight `#0E1015`, lime `#C8F04A`, teal `#0F766E`. No purple, no emoji, vector icons only.
 - Launcher: midnight field + lime spark (`ic_launcher_background.xml`, `ic_launcher_foreground.xml`)
 

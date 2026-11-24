@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LumoAgent"
+rootProject.name = "JarvisAgent"
 include(":app")

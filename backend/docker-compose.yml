@@ -3,18 +3,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: lumo
+      POSTGRES_USER: jarvis
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
-      POSTGRES_DB: lumo
+      POSTGRES_DB: jarvis
     ports:
       - "5432:5432"
     volumes:
-      - lumo-postgres:/var/lib/postgresql/data
+      - jarvis-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lumo -d lumo"]
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  lumo-postgres:
+  jarvis-postgres:

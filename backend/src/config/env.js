@@ -27,6 +27,10 @@ export const env = Object.freeze({
   role: process.env.ROLE ?? "all",
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: process.env.DATABASE_URL,
+  // pg-boss needs a session-level (direct) connection: LISTEN/NOTIFY and DDL
+  // do not work reliably through a transaction-mode pooler. Falls back to the
+  // pooled URL for local docker setups where both are the same server.
+  databaseUrlUnpooled: process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL,
   sessionSecret: process.env.SESSION_SECRET,
   tokenEncryptionKey: Buffer.from(process.env.TOKEN_ENCRYPTION_KEY_B64, "base64"),
   googleClientId: process.env.GOOGLE_CLIENT_ID,

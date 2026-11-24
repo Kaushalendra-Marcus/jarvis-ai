@@ -22,7 +22,7 @@ router.get("/google", (req, res, next) => {
 
 router.get("/google/callback", async (req, res, next) => {
   try {
-    if (req.query.error) return res.status(400).send("Google authorization was not completed. Return to Lumo and try again.");
+    if (req.query.error) return res.status(400).send("Google authorization was not completed. Return to Jarvis and try again.");
     const state = typeof req.query.state === "string" ? req.query.state : "";
     const code = typeof req.query.code === "string" ? req.query.code : "";
     const storedState = req.session.oauthState;
@@ -31,13 +31,13 @@ router.get("/google/callback", async (req, res, next) => {
     delete req.session.oauthCreatedAt;
     if (!state || !code || !storedState || !safeEquals(state, storedState) ||
         Date.now() - createdAt > 10 * 60_000) {
-      return res.status(400).send("OAuth state is invalid or expired. Return to Lumo and reconnect.");
+      return res.status(400).send("OAuth state is invalid or expired. Return to Jarvis and reconnect.");
     }
 
     const { email, refreshToken } = await exchangeAuthorizationCode(code);
     const existing = await prisma.googleAccount.findUnique({ where: { email } });
     if (!refreshToken && (!existing || existing.disconnectedAt)) {
-      return res.status(400).send("Google did not return offline access. Disconnect the Lumo app in Google Account settings, then connect again.");
+      return res.status(400).send("Google did not return offline access. Disconnect the Jarvis app in Google Account settings, then connect again.");
     }
     const account = await prisma.googleAccount.upsert({
       where: { email },
@@ -147,7 +147,7 @@ router.delete("/google", requireDeviceSession, async (req, res, next) => {
     });
     for (const email of pending) {
       if (email.pgBossJobId && req.app.locals.boss) {
-        await req.app.locals.boss.cancel("lumo-send-email", email.pgBossJobId);
+        await req.app.locals.boss.cancel("jarvis-send-email", email.pgBossJobId);
       }
     }
     const now = new Date();

@@ -8,7 +8,7 @@ test("token vault encrypts and decrypts refresh tokens and hashes opaque credent
   process.env.GOOGLE_CLIENT_ID = "test-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-secret";
   process.env.GOOGLE_REDIRECT_URI = "http://localhost:3000/auth/google/callback";
-  process.env.ANDROID_REDIRECT_URI = "lumo://oauth/callback";
+  process.env.ANDROID_REDIRECT_URI = "jarvis://oauth/callback";
   process.env.PUBLIC_BASE_URL = "http://localhost:3000";
 
   const vault = await import("../src/services/token-vault.js");
@@ -28,7 +28,7 @@ test("tampered encrypted token is rejected", async () => {
   process.env.GOOGLE_CLIENT_ID = "test-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-secret";
   process.env.GOOGLE_REDIRECT_URI = "http://localhost:3000/auth/google/callback";
-  process.env.ANDROID_REDIRECT_URI = "lumo://oauth/callback";
+  process.env.ANDROID_REDIRECT_URI = "jarvis://oauth/callback";
   process.env.PUBLIC_BASE_URL = "http://localhost:3000";
 
   const vault = await import("../src/services/token-vault.js");

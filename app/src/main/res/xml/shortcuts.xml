@@ -8,8 +8,8 @@
         android:shortcutLongLabel="@string/shortcut_voice_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="lumo://shortcut/voice"
-            android:targetClass="ai.lumo.app.MainActivity"
+            android:data="jarvis://shortcut/voice"
+            android:targetClass="ai.jarvis.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
     <shortcut
@@ -20,8 +20,8 @@
         android:shortcutLongLabel="@string/shortcut_inbox_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="lumo://shortcut/inbox"
-            android:targetClass="ai.lumo.app.MainActivity"
+            android:data="jarvis://shortcut/inbox"
+            android:targetClass="ai.jarvis.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
     <shortcut
@@ -32,8 +32,8 @@
         android:shortcutLongLabel="@string/shortcut_tasks_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="lumo://shortcut/tasks"
-            android:targetClass="ai.lumo.app.MainActivity"
+            android:data="jarvis://shortcut/tasks"
+            android:targetClass="ai.jarvis.app.MainActivity"
             android:targetPackage="@string/shortcut_package" />
     </shortcut>
 </shortcuts>
