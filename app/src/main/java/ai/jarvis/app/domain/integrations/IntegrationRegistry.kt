@@ -28,4 +28,14 @@ interface IntegrationRegistry {
     suspend fun addCustomMcp(id: String, title: String, serverUrl: String): Result<IntegrationDescriptor>
     suspend fun addCustomOpenApi(id: String, title: String, specUrl: String): Result<IntegrationDescriptor>
     suspend fun removeCustom(id: String): Result<Unit>
+    /**
+     * Completes the one-tap loop: after the user authorizes on the vendor page,
+     * the catalog app is stored CONNECTED (tools attach when a server URL is set).
+     */
+    suspend fun markCatalogConnected(
+        appId: String,
+        title: String,
+        serverUrl: String,
+        authUrl: String
+    ): Result<IntegrationDescriptor>
 }

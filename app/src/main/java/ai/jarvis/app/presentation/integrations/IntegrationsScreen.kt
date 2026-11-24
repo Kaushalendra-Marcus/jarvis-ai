@@ -65,7 +65,11 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IntegrationsScreen(registry: IntegrationRegistry, onConnectGmail: () -> Unit) {
+fun IntegrationsScreen(
+    registry: IntegrationRegistry,
+    onConnectGmail: () -> Unit,
+    onAuthorizeApp: (String) -> Unit = {}
+) {
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<IntegrationDescriptor>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -188,11 +192,15 @@ fun IntegrationsScreen(registry: IntegrationRegistry, onConnectGmail: () -> Unit
             onDismiss = { selected = null },
             onConnectGmail = { selected = null; onConnectGmail() },
             onDisconnectGmail = { scope.launch { registry.disconnect("gmail"); refresh(); selected = null } },
-            onSetupCustom = {
-                customName = app.name
-                showCustom = true
-                selected = null
+            onAuthorize = { url -> onAuthorizeApp(url) },
+            onConfirmConnected = { serverUrl ->
+                scope.launch {
+                    runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl) }
+                        .onSuccess { selected = null; refresh() }
+                        .onFailure { error = it.message }
+                }
             },
+            onDisconnectApp = { scope.launch { registry.removeCustom(app.id); refresh(); selected = null } },
             onOpenGuide = { selected = null; showGuide = true }
         )
     }
@@ -214,10 +222,11 @@ private fun AppTile(app: CatalogApp, status: IntegrationStatus?, modifier: Modif
             )
             val dot = when (status) {
                 IntegrationStatus.CONNECTED -> SuccessGreen
-                IntegrationStatus.UNVERIFIED, IntegrationStatus.ERROR, IntegrationStatus.DISCONNECTED -> WarningOrange
+                IntegrationStatus.UNVERIFIED, IntegrationStatus.ERROR, IntegrationStatus.DISCONNECTED ->
+                    if (app.kind == CatalogKind.CUSTOM_SOON) null else WarningOrange
                 null -> null
             }
-            if (dot != null && app.kind != CatalogKind.CUSTOM_SOON) {
+            if (dot != null) {
                 Box(
                     Modifier.align(Alignment.TopEnd)
                         .size(12.dp)
@@ -313,9 +322,12 @@ private fun AppDetailSheet(
     onDismiss: () -> Unit,
     onConnectGmail: () -> Unit,
     onDisconnectGmail: () -> Unit,
-    onSetupCustom: () -> Unit,
+    onAuthorize: (String) -> Unit,
+    onConfirmConnected: (String) -> Unit,
+    onDisconnectApp: () -> Unit,
     onOpenGuide: () -> Unit
 ) {
+    var serverUrl by remember(app.id) { mutableStateOf(app.serverHint) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
@@ -326,7 +338,7 @@ private fun AppDetailSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(app.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(8.dp))
-                if (status != null && app.kind != CatalogKind.CUSTOM_SOON) StatusPill(status)
+                if (status != null) StatusPill(status)
                 else if (app.kind == CatalogKind.CUSTOM_SOON) {
                     Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                         Text("Soon", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp))
@@ -354,12 +366,39 @@ private fun AppDetailSheet(
                     OutlinedButton(onClick = onOpenGuide, modifier = Modifier.fillMaxWidth()) { Text("How connecting works") }
                 }
                 CatalogKind.CUSTOM_SOON -> {
-                    Button(onClick = onSetupCustom, modifier = Modifier.fillMaxWidth()) { Text("Set up ${app.name}") }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Adds it as a guided custom connection below.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (status == IntegrationStatus.CONNECTED) {
+                        Text(
+                            "Authorized in Jarvis — Jarvis can use it now.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = onDisconnectApp, modifier = Modifier.fillMaxWidth()) { Text("Disconnect") }
+                    } else {
+                        OutlinedTextField(
+                            value = serverUrl,
+                            onValueChange = { serverUrl = it },
+                            label = { Text("Server URL (optional) — https://…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Button(
+                            onClick = { onAuthorize(app.authUrl.ifBlank { serverUrl.trim() }) },
+                            enabled = app.authUrl.isNotBlank() || serverUrl.trim().startsWith("https://"),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Authorize ${app.name}") }
+                        Text(
+                            "Opens ${app.name}'s authorization page here in Jarvis. Sign in, come back, then confirm below.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        OutlinedButton(onClick = { onConfirmConnected(serverUrl) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("I've authorized → Connect")
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(16.dp))

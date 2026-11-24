@@ -8,8 +8,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Default registry: built-in gmail tools are injected, calendar is a placeholder
- * (UNVERIFIED until OAuth scopes land), custom MCP/OpenAPI entries are restored from
- * [CustomIntegrationStore] and saved on every add/remove, so user data survives restarts.
+ * (UNVERIFIED until OAuth scopes land). Custom MCP/OpenAPI entries and catalog
+ * connections completed through the in-app authorization loop are restored from
+ * [CustomIntegrationStore] and saved on every change, so user data survives restarts.
  * No hardcoding in AgentOrchestrator — it only sees [allTools].
  */
 class IntegrationRegistryImpl(
@@ -19,44 +20,47 @@ class IntegrationRegistryImpl(
 ) : IntegrationRegistry {
 
     private val builtIns = builtInTools.toList()
-    private val custom = ConcurrentHashMap<String, IntegrationDescriptor>()
+    private val saved = ConcurrentHashMap<String, CustomIntegrationStore.SavedCustom>()
     private val customTools = ConcurrentHashMap<String, List<AgentTool>>()
     private var gmailConnected: Boolean = true
 
     init {
-        // Restore saved customs (UNVERIFIED until re-validated on first use).
-        store?.load().orEmpty().forEach { saved ->
-            val slug = "${saved.type}:${saved.id}"
-            val description = if (saved.type == "mcp") {
-                "Custom MCP at ${saved.url}. Marked UNVERIFIED until tool list validates."
-            } else {
-                "Custom OpenAPI at ${saved.url}. Marked UNVERIFIED until schema validates."
-            }
-            custom[slug] = IntegrationDescriptor(
-                slug, saved.title, description,
-                IntegrationStatus.UNVERIFIED, isBuiltIn = false, configUrl = saved.url
-            )
-            customTools[slug] = if (saved.type == "mcp") {
-                listOf(RemoteMcpTool(slug, saved.url))
-            } else {
-                listOf(RemoteOpenApiTool(slug, saved.url))
-            }
+        // Restore saved customs: catalog connections come back CONNECTED,
+        // MCP/OpenAPI entries come back UNVERIFIED until re-validated on first use.
+        store?.load().orEmpty().forEach { entry ->
+            saved[entry.id] = entry
+            customTools[entry.id] = toolsForEntry(entry)
         }
     }
 
-    private fun persist() {
-        val s = store ?: return
-        s.save(
-            custom.values.sortedBy { it.id }.map {
-                val type = if (it.id.startsWith("mcp:")) "mcp" else "openapi"
-                CustomIntegrationStore.SavedCustom(
-                    id = it.id.substringAfter(":"),
-                    title = it.title,
-                    type = type,
-                    url = it.configUrl.orEmpty()
-                )
+    private fun toolsForEntry(entry: CustomIntegrationStore.SavedCustom): List<AgentTool> {
+        if (entry.url.isBlank()) return emptyList()
+        val slug = "${entry.type}:${entry.id}"
+        return when (entry.type) {
+            "openapi" -> listOf(RemoteOpenApiTool(slug, entry.url))
+            else -> listOf(RemoteMcpTool(slug, entry.url))
+        }
+    }
+
+    private fun describe(entry: CustomIntegrationStore.SavedCustom): IntegrationDescriptor {
+        val status = if (entry.connected) IntegrationStatus.CONNECTED else IntegrationStatus.UNVERIFIED
+        val description = when (entry.type) {
+            "catalog" -> if (entry.url.isBlank()) {
+                "Authorized in Jarvis. Add its server URL below to unlock tools."
+            } else {
+                "Authorized in Jarvis at ${entry.url}."
             }
+            "mcp" -> "Custom MCP at ${entry.url}. Marked UNVERIFIED until tool list validates."
+            else -> "Custom OpenAPI at ${entry.url}. Marked UNVERIFIED until schema validates."
+        }
+        return IntegrationDescriptor(
+            entry.id, entry.title, description,
+            status, isBuiltIn = false, configUrl = entry.url.ifBlank { null }
         )
+    }
+
+    private fun persist() {
+        store?.save(saved.values.sortedBy { it.id })
     }
 
     override suspend fun descriptors(): List<IntegrationDescriptor> {
@@ -76,7 +80,7 @@ class IntegrationRegistryImpl(
                 isBuiltIn = true
             )
         )
-        list += custom.values.sortedBy { it.id }
+        list += saved.values.sortedBy { it.id }.map(::describe)
         return list
     }
 
@@ -110,26 +114,49 @@ class IntegrationRegistryImpl(
     override suspend fun addCustomMcp(id: String, title: String, serverUrl: String): Result<IntegrationDescriptor> = runCatching {
         require(serverUrl.startsWith("https://")) { "MCP server URL must be https:// (got $serverUrl)" }
         val slug = "mcp:$id"
-        val d = IntegrationDescriptor(slug, title, "Custom MCP at $serverUrl. Marked UNVERIFIED until tool list validates.", IntegrationStatus.UNVERIFIED, isBuiltIn = false, configUrl = serverUrl)
-        custom[slug] = d
+        val entry = CustomIntegrationStore.SavedCustom(slug, title, "mcp", serverUrl)
+        saved[slug] = entry
         // Dynamic discovery happens on first use via RemoteMcpTool (schema fetch + validate).
-        customTools[slug] = listOf(RemoteMcpTool(slug, serverUrl))
+        customTools[slug] = toolsForEntry(entry)
         persist()
-        d
+        describe(entry)
     }
 
     override suspend fun addCustomOpenApi(id: String, title: String, specUrl: String): Result<IntegrationDescriptor> = runCatching {
         require(specUrl.startsWith("https://")) { "OpenAPI spec URL must be https:// (got $specUrl)" }
         val slug = "openapi:$id"
-        val d = IntegrationDescriptor(slug, title, "Custom OpenAPI at $specUrl. Marked UNVERIFIED until schema validates.", IntegrationStatus.UNVERIFIED, isBuiltIn = false, configUrl = specUrl)
-        custom[slug] = d
-        customTools[slug] = listOf(RemoteOpenApiTool(slug, specUrl))
+        val entry = CustomIntegrationStore.SavedCustom(slug, title, "openapi", specUrl)
+        saved[slug] = entry
+        customTools[slug] = toolsForEntry(entry)
         persist()
-        d
+        describe(entry)
+    }
+
+    /**
+     * Completes the one-tap loop: after the user authorizes on the vendor page,
+     * the catalog app is stored CONNECTED (tools attach when a server URL is set).
+     */
+    override suspend fun markCatalogConnected(
+        appId: String,
+        title: String,
+        serverUrl: String,
+        authUrl: String
+    ): Result<IntegrationDescriptor> = runCatching {
+        if (serverUrl.isNotBlank()) {
+            require(serverUrl.startsWith("https://")) { "Server URL must be https://" }
+        }
+        val entry = CustomIntegrationStore.SavedCustom(
+            id = appId, title = title, type = "catalog",
+            url = serverUrl.trim(), connected = true, authUrl = authUrl
+        )
+        saved[appId] = entry
+        customTools[appId] = toolsForEntry(entry)
+        persist()
+        describe(entry)
     }
 
     override suspend fun removeCustom(id: String): Result<Unit> = runCatching {
-        custom.remove(id) ?: throw IllegalArgumentException("Custom integration not found: $id")
+        saved.remove(id) ?: throw IllegalArgumentException("Custom integration not found: $id")
         customTools.remove(id)
         persist()
     }
