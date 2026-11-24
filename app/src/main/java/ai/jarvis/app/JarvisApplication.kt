@@ -25,6 +25,7 @@ import ai.jarvis.app.data.tools.GmailSearchTool
 import ai.jarvis.app.data.local.metrics.RoomPerformanceRecorder
 import ai.jarvis.app.data.tools.BrowserAgentTool
 import ai.jarvis.app.data.tools.MemoryTool
+import ai.jarvis.app.data.tools.NotionTool
 import ai.jarvis.app.data.tools.SchedulerTool
 import ai.jarvis.app.data.tools.WebAutomationTool
 import ai.jarvis.app.domain.orchestrator.AgentOrchestrator
@@ -133,9 +134,16 @@ class JarvisApplication : Application() {
             builtInTools = gmailTools + listOf(emailTool, webTool, schedulerTool, memoryTool) + browserTools,
             store = CustomIntegrationStore(this)
         )
+        // Notion reads its token live from the connected catalog entry, so revoking
+        // the token in Notion cuts access immediately with no app update.
+        val notionTool = NotionTool(tokenProvider = {
+            kotlinx.coroutines.runBlocking {
+                runCatching { integrationRegistry.catalogToken("notion") }.getOrDefault("")
+            }
+        })
 
         val toolRegistry = ToolRegistry(
-            gmailTools + listOf(emailTool, webTool, schedulerTool, memoryTool) + browserTools
+            gmailTools + listOf(emailTool, webTool, schedulerTool, memoryTool, notionTool) + browserTools
         )
 
         // 4. Initialize LLM client and Orchestrator

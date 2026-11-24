@@ -140,19 +140,34 @@ class IntegrationRegistryImpl(
         appId: String,
         title: String,
         serverUrl: String,
-        authUrl: String
+        authUrl: String,
+        token: String
     ): Result<IntegrationDescriptor> = runCatching {
         if (serverUrl.isNotBlank()) {
             require(serverUrl.startsWith("https://")) { "Server URL must be https://" }
         }
         val entry = CustomIntegrationStore.SavedCustom(
             id = appId, title = title, type = "catalog",
-            url = serverUrl.trim(), connected = true, authUrl = authUrl
+            url = serverUrl.trim(), connected = true, authUrl = authUrl,
+            token = token.trim()
         )
         saved[appId] = entry
         customTools[appId] = toolsForEntry(entry)
         persist()
         describe(entry)
+    }
+
+    override suspend fun catalogToken(appId: String): String =
+        saved[appId]?.token.orEmpty()
+
+    override suspend fun updateCatalogToken(appId: String, token: String): Result<Unit> = runCatching {
+        val current = saved[appId] ?: throw IllegalStateException("Connect ${appId} first, then paste its token.")
+        val clean = token.trim()
+        require(clean.startsWith("secret_") || clean.startsWith("ntn_")) {
+            "That token looks wrong — paste the Internal Integration Token (starts with secret_)."
+        }
+        saved[appId] = current.copy(token = clean)
+        persist()
     }
 
     override suspend fun removeCustom(id: String): Result<Unit> = runCatching {

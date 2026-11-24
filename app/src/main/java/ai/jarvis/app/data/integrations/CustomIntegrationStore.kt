@@ -23,7 +23,9 @@ class CustomIntegrationStore(context: Context) {
         /** True once the user completed the in-app authorization loop. */
         val connected: Boolean = false,
         /** Vendor authorization page opened by Authorize. */
-        val authUrl: String = ""
+        val authUrl: String = "",
+        /** API token for apps that need one (e.g. Notion integration token). Never logged. */
+        val token: String = ""
     )
 
     fun load(): List<SavedCustom> {
@@ -38,7 +40,8 @@ class CustomIntegrationStore(context: Context) {
                     type = o.getString("type"),
                     url = o.getString("url"),
                     connected = o.optBoolean("connected", false),
-                    authUrl = o.optString("authUrl", "")
+                    authUrl = o.optString("authUrl", ""),
+                    token = o.optString("token", "")
                 )
             }
         }.getOrDefault(emptyList())
@@ -55,6 +58,7 @@ class CustomIntegrationStore(context: Context) {
                     .put("url", it.url)
                     .put("connected", it.connected)
                     .put("authUrl", it.authUrl)
+                    .put("token", it.token)
             )
         }
         prefs.edit().putString(KEY_CUSTOMS, arr.toString()).apply()

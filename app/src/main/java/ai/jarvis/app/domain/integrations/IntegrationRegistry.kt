@@ -36,6 +36,12 @@ interface IntegrationRegistry {
         appId: String,
         title: String,
         serverUrl: String,
-        authUrl: String
+        authUrl: String,
+        token: String = ""
     ): Result<IntegrationDescriptor>
-}
+
+    /** Saved API token for a connected catalog app (e.g. Notion). Empty when none. */
+    suspend fun catalogToken(appId: String): String
+
+    /** Stores/rotates the API token for a connected catalog app. */
+    suspend fun updateCatalogToken(appId: String, token: String): Result<Unit>}

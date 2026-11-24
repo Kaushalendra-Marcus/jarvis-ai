@@ -62,7 +62,7 @@ val TOP_APPS = listOf(
         "Read pages and file notes where you keep them.",
         R.drawable.ic_brand_notion, CatalogKind.CUSTOM_SOON
     ,
-        authUrl = "https://www.notion.so/my-account"),
+        authUrl = "https://www.notion.so/login"),
     CatalogApp(
         "spotify", "Spotify",
         "Queue playlists and control playback by voice.",

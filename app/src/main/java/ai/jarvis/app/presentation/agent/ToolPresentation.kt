@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 object ToolPresentation {
 
     fun title(toolName: String): String = when (toolName) {
+        "notion" -> "Notion"
         "search_emails" -> "Search Gmail"
         "read_email" -> "Read email"
         "create_email_draft" -> "Save Gmail draft"
@@ -38,6 +39,7 @@ object ToolPresentation {
 
     /** Shown while the tool runs, e.g. in the top bar and the typing indicator. */
     fun runningLabel(toolName: String): String = when (toolName) {
+        "notion" -> "Working in Notion…"
         "search_emails" -> "Searching your inbox…"
         "read_email" -> "Reading an email…"
         "create_email_draft" -> "Saving a draft…"
@@ -67,6 +69,7 @@ object ToolPresentation {
      * Null means the generic [icon] applies.
      */
     fun iconRes(toolName: String): Int? = when (toolName) {
+        "notion" -> R.drawable.ic_brand_notion
         "search_emails", "read_email", "create_email_draft", "send_email" -> R.drawable.ic_brand_gmail
         "manage_memory" -> R.drawable.ic_orb_memory
         "schedule_task" -> R.drawable.ic_orb_routine

@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -193,9 +194,9 @@ fun IntegrationsScreen(
             onConnectGmail = { selected = null; onConnectGmail() },
             onDisconnectGmail = { scope.launch { registry.disconnect("gmail"); refresh(); selected = null } },
             onAuthorize = { url -> onAuthorizeApp(url) },
-            onConfirmConnected = { serverUrl ->
+            onConfirmConnected = { serverUrl, token ->
                 scope.launch {
-                    runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl) }
+                    runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl, token.trim()) }
                         .onSuccess { selected = null; refresh() }
                         .onFailure { error = it.message }
                 }
@@ -323,11 +324,12 @@ private fun AppDetailSheet(
     onConnectGmail: () -> Unit,
     onDisconnectGmail: () -> Unit,
     onAuthorize: (String) -> Unit,
-    onConfirmConnected: (String) -> Unit,
+    onConfirmConnected: (serverUrl: String, token: String) -> Unit,
     onDisconnectApp: () -> Unit,
     onOpenGuide: () -> Unit
 ) {
     var serverUrl by remember(app.id) { mutableStateOf(app.serverHint) }
+    var apiToken by remember(app.id) { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
@@ -384,6 +386,15 @@ private fun AppDetailSheet(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
+                        OutlinedTextField(
+                            value = apiToken,
+                            onValueChange = { apiToken = it },
+                            label = { Text("API token (for apps like Notion) — secret_…") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
                         Button(
                             onClick = { onAuthorize(app.authUrl.ifBlank { serverUrl.trim() }) },
                             enabled = app.authUrl.isNotBlank() || serverUrl.trim().startsWith("https://"),
@@ -395,7 +406,7 @@ private fun AppDetailSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
-                        OutlinedButton(onClick = { onConfirmConnected(serverUrl) }, modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { onConfirmConnected(serverUrl, apiToken) }, modifier = Modifier.fillMaxWidth()) {
                             Text("I've authorized → Connect")
                         }
                     }
