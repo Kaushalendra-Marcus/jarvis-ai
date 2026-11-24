@@ -380,16 +380,18 @@ fun AgentScreen(
                     }
                 }
 
-                StageAction(
-                    icon = R.drawable.ic_orb_inbox,
-                    label = "Inbox",
-                    tint = MaterialTheme.colorScheme.primary,
-                    onClick = onOpenMailbox,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .offset(y = (-24).dp)
-                        .padding(end = 14.dp)
-                )
+                if (!showReply) {
+                    StageAction(
+                        icon = R.drawable.ic_orb_inbox,
+                        label = "Inbox",
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = onOpenMailbox,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .offset(y = (-24).dp)
+                            .padding(end = 14.dp)
+                    )
+                }
             }
         }
     }
