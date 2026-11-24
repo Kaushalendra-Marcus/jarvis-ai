@@ -37,19 +37,22 @@ class BackendApiClient(
         )
     }
 
-    suspend fun exchangeAuthorizationCode(code: String): BackendSession = withContext(Dispatchers.IO) {
-        val payload = JSONObject().put("code", code).toString()
-        val response = execute(
-            Request.Builder()
-                .url("$baseUrl/api/v1/auth/exchange")
-                .post(payload.toRequestBody(JSON))
-                .build()
-        )
-        BackendSession(
-            accessToken = response.getString("accessToken"),
-            expiresAt = response.getString("expiresAt")
-        )
-    }
+    suspend fun exchangeAuthorizationCode(code: String, linkToken: String? = null): BackendSession =
+        withContext(Dispatchers.IO) {
+            val payload = JSONObject().put("code", code).apply {
+                if (!linkToken.isNullOrBlank()) put("linkToken", linkToken)
+            }.toString()
+            val response = execute(
+                Request.Builder()
+                    .url("$baseUrl/api/v1/auth/exchange")
+                    .post(payload.toRequestBody(JSON))
+                    .build()
+            )
+            BackendSession(
+                accessToken = response.getString("accessToken"),
+                expiresAt = response.getString("expiresAt")
+            )
+        }
 
     suspend fun sendEmail(
         accessToken: String,
@@ -104,9 +107,51 @@ class BackendApiClient(
         )
     }
 
-    suspend fun getAccount(accessToken: String): String = withContext(Dispatchers.IO) {
+    /** Gmail address behind a session, or null for user-only (no Google yet) sessions. */
+    suspend fun getAccount(accessToken: String): String? = withContext(Dispatchers.IO) {
         val response = execute(authenticatedRequest("$baseUrl/api/v1/auth/me", accessToken).get().build())
-        response.getString("email")
+        response.optString("email", "").takeIf { it.isNotBlank() }
+    }
+
+    /** App-level accounts: signup, login, profile, logout. Sessions unify user + Gmail. */
+    suspend fun signUp(email: String, password: String): UserSession = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("email", email).put("password", password).toString()
+        val response = execute(
+            Request.Builder().url("$baseUrl/api/v1/users/signup").post(payload.toRequestBody(JSON)).build()
+        )
+        UserSession(
+            email = response.getString("email"),
+            accessToken = response.getString("accessToken"),
+            expiresAt = response.getString("expiresAt")
+        )
+    }
+
+    suspend fun login(email: String, password: String): UserSession = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("email", email).put("password", password).toString()
+        val response = execute(
+            Request.Builder().url("$baseUrl/api/v1/users/login").post(payload.toRequestBody(JSON)).build()
+        )
+        UserSession(
+            email = response.getString("email"),
+            accessToken = response.getString("accessToken"),
+            expiresAt = response.getString("expiresAt")
+        )
+    }
+
+    /** App account email behind a session, or null for guest (Google-only) sessions. */
+    suspend fun getUserProfile(accessToken: String): String? = withContext(Dispatchers.IO) {
+        val response = execute(authenticatedRequest("$baseUrl/api/v1/users/me", accessToken).get().build())
+        response.optJSONObject("user")?.optString("email", "")?.takeIf { it.isNotBlank() }
+    }
+
+    /** Logs out this device. Server data (Gmail grant, memories) stays intact. */
+    suspend fun logout(accessToken: String): Unit = withContext(Dispatchers.IO) {
+        execute(
+            authenticatedRequest("$baseUrl/api/v1/users/logout", accessToken)
+                .post(ByteArray(0).toRequestBody(null))
+                .build(),
+            expectJson = false
+        )
     }
 
     suspend fun refreshSession(accessToken: String): BackendSession = withContext(Dispatchers.IO) {
@@ -149,6 +194,8 @@ class BackendApiClient(
     }
 
     data class BackendSession(val accessToken: String, val expiresAt: String)
+
+    data class UserSession(val email: String, val accessToken: String, val expiresAt: String)
 
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()

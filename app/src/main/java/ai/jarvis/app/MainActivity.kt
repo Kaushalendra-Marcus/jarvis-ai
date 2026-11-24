@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
         val settingsViewModel = SettingsViewModel(
             securePreferences = app.securePreferences,
             backendAuthManager = backendAuthManager,
+            userAccountManager = app.userAccountManager,
             performanceRecorder = app.performanceRecorder,
             mailSourceManager = app.mailSourceManager
         )

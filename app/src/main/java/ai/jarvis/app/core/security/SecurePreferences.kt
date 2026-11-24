@@ -156,6 +156,25 @@ class SecurePreferences(context: Context) {
             ?.apply()
     }
 
+    /** App-level account email from signup/login. Blank = guest (Google-only or signed out). */
+    fun getUserEmail(): String =
+        securePreferences?.getString(KEY_USER_EMAIL, null)?.takeIf { it.isNotBlank() }.orEmpty()
+
+    fun saveUserEmail(email: String) {
+        checkNotNull(securePreferences) { "Encrypted storage is unavailable. The account email was not saved." }
+            .edit()
+            .putString(KEY_USER_EMAIL, email.trim())
+            .apply()
+    }
+
+    fun clearUserEmail() {
+        securePreferences?.edit()?.remove(KEY_USER_EMAIL)?.apply()
+    }
+
+    /** True only for a real app account (guest Google sessions don't count). */
+    fun isUserLoggedIn(): Boolean =
+        getUserEmail().isNotBlank() && !getBackendAccessToken().isNullOrBlank()
+
     fun isVoiceFeedbackEnabled(): Boolean {
         // Spoken replies are opt-in: the chat header toggle turns them on.
         return preferences.getBoolean(KEY_VOICE_FEEDBACK, false)
@@ -227,6 +246,7 @@ class SecurePreferences(context: Context) {
         private const val KEY_DEFAULT_EMAIL = "default_email"
         private const val KEY_BACKEND_ACCESS_TOKEN = "backend_access_token"
         private const val KEY_BACKEND_SESSION_EXPIRES_AT = "backend_session_expires_at"
+        private const val KEY_USER_EMAIL = "user_account_email"
         private const val KEY_VOICE_FEEDBACK = "voice_feedback"
     }
 }

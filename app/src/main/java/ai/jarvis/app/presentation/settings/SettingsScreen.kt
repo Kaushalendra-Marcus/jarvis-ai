@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.jarvis.app.presentation.theme.*
@@ -55,6 +57,20 @@ fun SettingsScreen(
 
     var modelInput by remember { mutableStateOf("") }
     var keyInput by remember { mutableStateOf("") }
+    val accountEmail by viewModel.accountEmail.collectAsState()
+    val accountBusy by viewModel.accountBusy.collectAsState()
+    val accountError by viewModel.accountError.collectAsState()
+
+    var accountMode by remember { mutableStateOf("login") }
+    var accountEmailInput by remember { mutableStateOf("") }
+    var accountPasswordInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(accountEmail) {
+        if (accountEmail.isNotBlank()) {
+            accountEmailInput = ""
+            accountPasswordInput = ""
+        }
+    }
     var emailInput by remember(currentEmail) { mutableStateOf(currentEmail) }
     var keyVisible by remember { mutableStateOf(false) }
     LaunchedEffect(llmProvider) {
@@ -98,6 +114,88 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ---- Account ----
+            SettingsSection(
+                title = "Account", icon = Icons.Default.Person,
+                expanded = expanded == "account", onExpand = { toggle("account") }
+            ) {
+                if (accountEmail.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            accountEmail,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Text(
+                        "Signed in on this device. Logging out ends this session; your Gmail grant and memories stay on the server.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = viewModel::logout,
+                        enabled = !accountBusy
+                    ) { Text(if (accountBusy) "Logging out…" else "Log out") }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = accountMode == "login",
+                            onClick = { accountMode = "login"; viewModel.clearAccountError() },
+                            label = { Text("Log in") }
+                        )
+                        FilterChip(
+                            selected = accountMode == "signup",
+                            onClick = { accountMode = "signup"; viewModel.clearAccountError() },
+                            label = { Text("Create account") }
+                        )
+                    }
+                    OutlinedTextField(
+                        value = accountEmailInput,
+                        onValueChange = { accountEmailInput = it },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = accountPasswordInput,
+                        onValueChange = { accountPasswordInput = it },
+                        label = { Text("Password (min 8 characters)") },
+                        singleLine = true,
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                                )
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    accountError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Button(
+                        onClick = {
+                            if (accountMode == "signup") viewModel.signUp(accountEmailInput, accountPasswordInput)
+                            else viewModel.login(accountEmailInput, accountPasswordInput)
+                        },
+                        enabled = !accountBusy && accountEmailInput.isNotBlank() && accountPasswordInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (accountBusy) "Please wait…" else if (accountMode == "signup") "Create account" else "Log in") }
+                    Text(
+                        "One account per device. Gmail stays separate under Mailbox — connect it after signing in to keep both on one session.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // ---- AI ----
             SettingsSection(
                 title = "AI model", icon = Icons.Default.AutoAwesome,

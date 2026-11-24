@@ -61,10 +61,14 @@ class BackendAuthManager(
 
         _connectionState.value = "Completing secure Gmail connection…"
         try {
-            val session = api.exchangeAuthorizationCode(code)
+            // Logged-in app users keep one identity: pass the device token so the
+            // backend links Gmail into the existing user session instead of swapping it.
+            val linkToken = securePreferences.getBackendAccessToken()
+                ?.takeIf { it.isNotBlank() && securePreferences.getUserEmail().isNotBlank() }
+            val session = api.exchangeAuthorizationCode(code, linkToken)
             securePreferences.saveBackendSession(session.accessToken, Instant.parse(session.expiresAt).toEpochMilli())
             val email = api.getAccount(session.accessToken)
-            _connectionState.value = "Connected as $email"
+            _connectionState.value = if (email.isNullOrBlank()) "Gmail not connected" else "Connected as $email"
         } catch (error: Exception) {
             if (error is BackendApiException && error.statusCode == 401) {
                 securePreferences.clearBackendAccessToken()
@@ -83,7 +87,8 @@ class BackendAuthManager(
         try {
             val currentToken = currentAccessToken() ?: return@withContext
             val email = api.getAccount(currentToken)
-            _connectionState.value = "Connected as $email"
+            // A user-only session (no Google yet) is healthy: Gmail just isn't connected.
+            _connectionState.value = if (email.isNullOrBlank()) "Gmail not connected" else "Connected as $email"
         } catch (error: BackendApiException) {
             if (error.statusCode == 401) {
                 securePreferences.clearBackendAccessToken()

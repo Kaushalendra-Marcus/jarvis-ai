@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireDeviceSession } from "../middleware/device-auth.js";
+import { requireDeviceSession, requireGoogleAccount } from "../middleware/device-auth.js";
 import { createGmailClient } from "../services/google.js";
 import { createInboxService, MAX_SEARCH_RESULTS } from "../services/gmail-inbox.js";
 import { sendEmailSchema } from "../utils/validation.js";
 
 const inbox = createInboxService(createGmailClient);
 const router = Router();
-router.use(requireDeviceSession);
+router.use(requireDeviceSession, requireGoogleAccount);
 
 const searchSchema = z.object({
   q: z.string().max(500).optional(),

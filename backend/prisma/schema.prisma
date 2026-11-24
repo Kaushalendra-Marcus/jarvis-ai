@@ -19,11 +19,23 @@ enum ScheduledEmailStatus {
   UNKNOWN
 }
 
+model User {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  passwordHash String         @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  googleAccounts GoogleAccount[]
+  deviceSessions DeviceSession[]
+}
+
 model GoogleAccount {
   id                    String          @id @default(uuid()) @db.Uuid
   email                 String          @unique
   encryptedRefreshToken String          @db.Text
   disconnectedAt        DateTime?
+  userId                String?         @db.Uuid
+  user                  User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   appCodes              AppAuthCode[]
@@ -46,13 +58,16 @@ model AppAuthCode {
 model DeviceSession {
   id        String        @id @default(uuid()) @db.Uuid
   tokenHash String        @unique
-  accountId String        @db.Uuid
-  account   GoogleAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String?       @db.Uuid
+  account   GoogleAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId    String?       @db.Uuid
+  user      User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime      @default(now())
 
   @@index([accountId, expiresAt])
+  @@index([userId, expiresAt])
 }
 
 model ScheduledEmail {

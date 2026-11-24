@@ -11,6 +11,7 @@ import ai.jarvis.app.data.local.FileConversationLibrary
 import ai.jarvis.app.data.remote.ProviderAgentClient
 import ai.jarvis.app.data.remote.BackendApiClient
 import ai.jarvis.app.data.remote.BackendAuthManager
+import ai.jarvis.app.data.remote.UserAccountManager
 import ai.jarvis.app.data.repository.MemoryRepositoryImpl
 import ai.jarvis.app.data.repository.TaskSchedulerRepositoryImpl
 import ai.jarvis.app.data.tools.EmailTool
@@ -51,6 +52,7 @@ class JarvisApplication : Application() {
 
     lateinit var securePreferences: SecurePreferences private set
     lateinit var backendAuthManager: BackendAuthManager private set
+    lateinit var userAccountManager: UserAccountManager private set
     lateinit var mailService: MailGateway private set
     lateinit var mailSourceManager: MailSourceManager private set
     lateinit var database: AppDatabase private set
@@ -72,6 +74,7 @@ class JarvisApplication : Application() {
         securePreferences = SecurePreferences(this)
         val backendApi = BackendApiClient(BuildConfig.API_BASE_URL)
         backendAuthManager = BackendAuthManager(backendApi, securePreferences)
+        userAccountManager = UserAccountManager(backendApi, securePreferences)
         mailSourceManager = MailSourceManager(securePreferences, backendAuthManager)
         // Wake the hosted backend early so the first Gmail action is not slow.
         applicationScope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)

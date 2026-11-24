@@ -73,21 +73,48 @@ router.post("/exchange", async (req, res, next) => {
     if (typeof code !== "string" || !/^[A-Za-z0-9_-]{40,}$/.test(code)) {
       return res.status(400).json({ error: "Invalid authorization code." });
     }
-    const appCode = await prisma.appAuthCode.findUnique({
+    // Test seam (see users.js): production always uses the singleton.
+    const db = req.app.locals.prisma ?? prisma;
+    const appCode = await db.appAuthCode.findUnique({
       where: { codeHash: hashOpaqueToken(code) }
     });
     if (!appCode || appCode.usedAt || appCode.expiresAt <= new Date()) {
       return res.status(401).json({ error: "Authorization code is expired or already used." });
     }
-    const claimed = await prisma.appAuthCode.updateMany({
+    const claimed = await db.appAuthCode.updateMany({
       where: { id: appCode.id, usedAt: null, expiresAt: { gt: new Date() } },
       data: { usedAt: new Date() }
     });
     if (claimed.count !== 1) return res.status(401).json({ error: "Authorization code has already been used." });
 
+    // Logged-in app users link Gmail into their existing session: the device keeps
+    // one identity (user + Google) instead of swapping to a Google-only session.
+    const linkToken = req.body?.linkToken;
+    if (typeof linkToken === "string" && /^[A-Za-z0-9_-]{40,}$/.test(linkToken)) {
+      const existing = await db.deviceSession.findUnique({
+        where: { tokenHash: hashOpaqueToken(linkToken) },
+        include: { user: { select: { id: true } } }
+      });
+      if (existing?.user && !existing.revokedAt && existing.expiresAt > new Date()) {
+        await db.deviceSession.update({
+          where: { id: existing.id },
+          data: { accountId: appCode.accountId }
+        });
+        await db.googleAccount.update({
+          where: { id: appCode.accountId },
+          data: { userId: existing.user.id }
+        });
+        res.set("Cache-Control", "no-store").json({
+          accessToken: linkToken,
+          expiresAt: existing.expiresAt
+        });
+        return;
+      }
+    }
+
     const accessToken = createOpaqueToken();
     const expiresAt = new Date(Date.now() + env.accessTokenTtlDays * 86_400_000);
-    await prisma.deviceSession.create({
+    await db.deviceSession.create({
       data: {
         accountId: appCode.accountId,
         tokenHash: hashOpaqueToken(accessToken),
@@ -105,6 +132,7 @@ router.get("/me", requireDeviceSession, async (req, res) => {
     connected: true,
     shared: isSharedAccount(req.accountEmail),
     email: req.accountEmail,
+    userEmail: req.userEmail,
     expiresAt: req.deviceSession.expiresAt
   });
 });
@@ -116,7 +144,7 @@ router.post("/session/refresh", requireDeviceSession, async (req, res, next) => 
     await prisma.$transaction([
       prisma.deviceSession.update({ where: { id: req.deviceSession.id }, data: { revokedAt: new Date() } }),
       prisma.deviceSession.create({
-        data: { accountId: req.accountId, tokenHash: hashOpaqueToken(accessToken), expiresAt }
+        data: { accountId: req.accountId, userId: req.userId, tokenHash: hashOpaqueToken(accessToken), expiresAt }
       })
     ]);
     res.set("Cache-Control", "no-store").json({ accessToken, expiresAt });

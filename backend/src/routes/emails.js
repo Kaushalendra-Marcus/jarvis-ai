@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireDeviceSession } from "../middleware/device-auth.js";
+import { requireDeviceSession, requireGoogleAccount } from "../middleware/device-auth.js";
 import {
   cancelEmail,
   getEmail,
@@ -11,7 +11,7 @@ import { assertRecipientAllowed } from "../services/shared-account.js";
 import { scheduleEmailSchema, sendEmailSchema, updateEmailSchema } from "../utils/validation.js";
 
 const router = Router();
-router.use(requireDeviceSession);
+router.use(requireDeviceSession, requireGoogleAccount);
 
 function parseIdempotencyKey(req, res) {
   const value = req.get("idempotency-key");

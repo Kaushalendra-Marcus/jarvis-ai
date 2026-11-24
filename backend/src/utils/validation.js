@@ -29,6 +29,13 @@ export const sendEmailSchema = z.object({
   body
 }).strict();
 
+const password = z.string().min(8, "Password must be at least 8 characters.").max(128);
+
+export const userCredentialsSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(email),
+  password
+}).strict();
+
 export function normalizeError(error) {
   const code = Number(error?.response?.status ?? error?.status ?? 0);
   return {

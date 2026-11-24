@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import ai.jarvis.app.core.security.SecurePreferences
 import ai.jarvis.app.data.mail.MailSourceManager
 import ai.jarvis.app.data.remote.BackendAuthManager
+import ai.jarvis.app.data.remote.UserAccountManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,7 @@ import ai.jarvis.app.domain.metrics.MetricSummary
 class SettingsViewModel(
     private val securePreferences: SecurePreferences,
     private val backendAuthManager: BackendAuthManager,
+    private val userAccountManager: UserAccountManager,
     private val performanceRecorder: RoomPerformanceRecorder? = null,
     private val mailSourceManager: MailSourceManager? = null
 ) : ViewModel() {
@@ -47,7 +49,38 @@ class SettingsViewModel(
     }
 
     fun disconnectGmail() {
-        viewModelScope.launch { backendAuthManager.disconnect() }
+        viewModelScope.launch {
+            backendAuthManager.disconnect()
+            // Server disconnect revokes every session of the Google account, so any
+            // linked app identity on this device is dead too. Stay truthful in UI.
+            userAccountManager.signOutLocally()
+        }
+    }
+
+    // ---- App account (email + password signup / login / logout) ----
+    val accountEmail: StateFlow<String> = userAccountManager.userEmail
+    val accountBusy: StateFlow<Boolean> = userAccountManager.busy
+    val accountError: StateFlow<String?> = userAccountManager.error
+
+    fun clearAccountError() = userAccountManager.clearError()
+
+    fun signUp(email: String, password: String) {
+        viewModelScope.launch {
+            if (userAccountManager.signUp(email, password)) backendAuthManager.refreshConnectionState()
+        }
+    }
+
+    fun login(email: String, password: String) {
+        viewModelScope.launch {
+            if (userAccountManager.login(email, password)) backendAuthManager.refreshConnectionState()
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            userAccountManager.logout()
+            backendAuthManager.refreshConnectionState()
+        }
     }
 
     val themeMode: StateFlow<String> = securePreferences.themeMode

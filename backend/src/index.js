@@ -9,8 +9,10 @@ import { Prisma } from "@prisma/client";
 import { env } from "./config/env.js";
 import { prisma } from "./database/prisma.js";
 import authRoutes from "./routes/auth.js";
+import userRoutes from "./routes/users.js";
 import emailRoutes from "./routes/emails.js";
 import gmailRoutes from "./routes/gmail.js";
+import { ensureUserTables } from "./services/ensure-user-tables.js";
 import { ensureEmailQueue, startEmailWorker } from "./scheduler/worker.js";
 import { EMAIL_QUEUE } from "./services/email-queue.js";
 
@@ -64,6 +66,7 @@ app.get("/health", async (_req, res) => {
 });
 app.use("/auth", authRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/emails", emailRoutes);
 app.use("/api/v1/gmail", gmailRoutes);
 
@@ -99,6 +102,8 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 async function main() {
+  // Self-migrating user-accounts DDL (idempotent; see ensure-user-tables.js).
+  await ensureUserTables(sessionPool);
   boss = new PgBoss({
     connectionString: env.databaseUrlUnpooled,
     schema: "pgboss",
