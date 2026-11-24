@@ -78,17 +78,17 @@ class CronScheduleTest {
         val s = CronSchedule.parse("daily_at_09:30")
         assertNotNull(s)
         assertEquals(9 to 30, s!!.fixedTime)
-        assertEquals("Daily at 09:30", s.describe())
+        assertEquals("Daily at 9:30 AM", s.describe())
     }
 
     @Test
     fun friendlyRecurrenceWords() {
-        assertEquals("Weekdays at 09:00", CronSchedule.fromRecurrence("weekdays", 9, 0)!!.describe())
-        assertEquals("Weekends at 10:15", CronSchedule.fromRecurrence("weekends", 10, 15)!!.describe())
-        assertEquals("Daily at 21:00", CronSchedule.fromRecurrence("daily", 21, 0)!!.describe())
-        assertEquals("Daily at 07:05", CronSchedule.fromRecurrence(null, 7, 5)!!.describe())
-        assertEquals("Every Monday at 09:00", CronSchedule.fromRecurrence("Monday", 9, 0)!!.describe())
-        assertEquals("Mon, Wed, Fri at 18:30", CronSchedule.fromRecurrence("MON, WED and FRI", 18, 30)!!.describe())
+        assertEquals("Weekdays at 9:00 AM", CronSchedule.fromRecurrence("weekdays", 9, 0)!!.describe())
+        assertEquals("Weekends at 10:15 AM", CronSchedule.fromRecurrence("weekends", 10, 15)!!.describe())
+        assertEquals("Daily at 9:00 PM", CronSchedule.fromRecurrence("daily", 21, 0)!!.describe())
+        assertEquals("Daily at 7:05 AM", CronSchedule.fromRecurrence(null, 7, 5)!!.describe())
+        assertEquals("Every Monday at 9:00 AM", CronSchedule.fromRecurrence("Monday", 9, 0)!!.describe())
+        assertEquals("Mon, Wed, Fri at 6:30 PM", CronSchedule.fromRecurrence("MON, WED and FRI", 18, 30)!!.describe())
         assertEquals("0 6 * * 1-5", CronSchedule.fromRecurrence("0 6 * * 1-5", 9, 0)!!.expression)
         assertNull(CronSchedule.fromRecurrence("every blursday", 9, 0))
         assertNull(CronSchedule.fromRecurrence("daily", 25, 0))
@@ -97,7 +97,7 @@ class CronScheduleTest {
     @Test
     fun withTimeKeepsTheDaysAndChangesTheClock() {
         val moved = CronSchedule.parse("0 9 * * 1-5")!!.withTime(18, 45)!!
-        assertEquals("Weekdays at 18:45", moved.describe())
+        assertEquals("Weekdays at 6:45 PM", moved.describe())
         assertNull(CronSchedule.parse("*/15 * * * *")!!.withTime(9, 0))
     }
 }

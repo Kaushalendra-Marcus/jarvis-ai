@@ -78,9 +78,11 @@ class CronSchedule private constructor(
         return parse(parts.joinToString(" "))
     }
 
-    /** Short human description, for example "Weekdays at 09:00" or "Every Monday at 18:30". */
+    /** Short human description, for example "Weekdays at 9:00 AM" or "Every Monday at 6:30 PM". */
     fun describe(): String {
-        val time = fixedTime?.let { (h, m) -> String.format("%02d:%02d", h, m) }
+        val time = fixedTime?.let { (h, m) ->
+            ai.jarvis.app.core.util.TimeUtils.formatHourMinute(h, m)
+        }
         val dayPart = when {
             !dowRestricted && !domRestricted && months.size == 12 -> "Daily"
             dowRestricted && !domRestricted && months.size == 12 -> describeDays(daysOfWeek)

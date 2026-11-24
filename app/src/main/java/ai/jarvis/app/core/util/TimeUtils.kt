@@ -8,20 +8,35 @@ import java.util.concurrent.TimeUnit
 
 object TimeUtils {
 
-    private val dateTimeFormatter = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
-    private val sameYearFormatter = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
-    private val timeOnlyFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val dateTimeFormatter = SimpleDateFormat("MMM dd, yyyy h:mm a", Locale.getDefault())
+    private val sameYearFormatter = SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault())
+    private val timeOnlyFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
 
-    /** "Nov 25, 09:12" this year, "Nov 25, 2025 09:12" otherwise — shorter where it counts. */
+    /** "Nov 25, 9:12 AM" this year, "Nov 25, 2025 9:12 AM" otherwise — shorter where it counts. */
     fun formatDateTime(epochMillis: Long): String {
+        val zone = java.util.TimeZone.getDefault()
+        dateTimeFormatter.timeZone = zone
+        sameYearFormatter.timeZone = zone
         val targetYear = Calendar.getInstance().apply { timeInMillis = epochMillis }.get(Calendar.YEAR)
         val thisYear = Calendar.getInstance().get(Calendar.YEAR)
         return if (targetYear == thisYear) sameYearFormatter.format(Date(epochMillis))
         else dateTimeFormatter.format(Date(epochMillis))
     }
 
+    /** 12-hour clock, e.g. "9:12 AM". */
     fun formatTime(epochMillis: Long): String {
+        timeOnlyFormatter.timeZone = java.util.TimeZone.getDefault()
         return timeOnlyFormatter.format(Date(epochMillis))
+    }
+
+    /** 12-hour clock from hour/minute parts, e.g. "9:05 PM". Hour is 0-23. */
+    fun formatHourMinute(hourOfDay: Int, minute: Int): String {
+        val hour12 = when (hourOfDay % 12) {
+            0 -> 12
+            else -> hourOfDay % 12
+        }
+        val meridiem = if (hourOfDay < 12) "AM" else "PM"
+        return "$hour12:${minute.toString().padStart(2, '0')} $meridiem"
     }
 
     /**

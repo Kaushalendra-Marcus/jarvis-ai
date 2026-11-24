@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ai.jarvis.app.JarvisApplication
+import ai.jarvis.app.core.security.SecurePreferences
 import ai.jarvis.app.core.util.NetworkMonitor
 import ai.jarvis.app.domain.metrics.PerformanceRecorder
 import ai.jarvis.app.domain.model.ScheduledTaskStatus
@@ -44,6 +45,13 @@ class ScheduledTaskWorker(
         // A manual trigger and a periodic run can target the same task. Ignore the
         // duplicate attempt instead of running the workflow twice.
         if (!runningTaskIds.add(taskId)) {
+            return Result.success()
+        }
+
+        // The exact alarm and the WorkManager chain race for the same occurrence:
+        // only the first to claim the run token executes.
+        val runToken = inputData.getLong(KEY_RUN_TOKEN, 0L)
+        if (!TaskRunGate.claim(taskId, runToken)) {
             return Result.success()
         }
 
@@ -136,7 +144,11 @@ class ScheduledTaskWorker(
                 showNotification(taskTitle, TaskExecutionPolicy.notificationMessage(outcome))
                 Result.success()
             }
-            WorkDisposition.RETRY -> Result.retry()
+            WorkDisposition.RETRY -> {
+                // Release the claim so the backoff retry can reclaim this occurrence.
+                TaskRunGate.release(taskId, inputData.getLong(KEY_RUN_TOKEN, 0L))
+                Result.retry()
+            }
             WorkDisposition.FAILURE -> {
                 showNotification(taskTitle, TaskExecutionPolicy.notificationMessage(outcome))
                 Result.failure()
@@ -144,19 +156,52 @@ class ScheduledTaskWorker(
         }
     }
 
-    private fun showNotification(title: String, message: String) {
-        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun prefs() = applicationContext.getSharedPreferences(
+        SecurePreferences.PREFS_SETTINGS_FILE, android.content.Context.MODE_PRIVATE
+    )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Jarvis Background Tasks",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Notifications for recurring and scheduled agent tasks"
+    private fun notificationsEnabled(): Boolean =
+        prefs().getBoolean(SecurePreferences.KEY_TASK_NOTIFICATIONS, true)
+
+    private fun ensureAlarmChannel(): String {
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val soundOn = prefs().getBoolean(SecurePreferences.KEY_TASK_ALARM_SOUND, true)
+        val vibrateOn = prefs().getBoolean(SecurePreferences.KEY_TASK_VIBRATE, true)
+        val signature = "sound=$soundOn;vibrate=$vibrateOn"
+        if (prefs().getString(KEY_APPLIED_CHANNEL_CONFIG, "") != signature) {
+            notificationManager.deleteNotificationChannel(ALARM_CHANNEL_ID)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val soundUri = if (soundOn) {
+                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                } else null
+                val channel = NotificationChannel(
+                    ALARM_CHANNEL_ID,
+                    "Jarvis Routine Alarms",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Audible alarms when scheduled routines finish"
+                    enableVibration(vibrateOn)
+                    vibrationPattern = longArrayOf(0, 500, 250, 500)
+                    setSound(
+                        soundUri,
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    setBypassDnd(false)
+                }
+                notificationManager.createNotificationChannel(channel)
             }
-            notificationManager.createNotificationChannel(channel)
+            prefs().edit().putString(KEY_APPLIED_CHANNEL_CONFIG, signature).apply()
         }
+        return ALARM_CHANNEL_ID
+    }
+
+    private fun showNotification(title: String, message: String) {
+        if (!notificationsEnabled()) return
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = ensureAlarmChannel()
 
         val openAppIntent = applicationContext.packageManager
             .getLaunchIntentForPackage(applicationContext.packageName)
@@ -168,12 +213,14 @@ class ScheduledTaskWorker(
             flags
         )
 
-        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
@@ -186,7 +233,9 @@ class ScheduledTaskWorker(
         const val KEY_PROMPT_ACTION = "key_prompt_action"
         const val KEY_TASK_TITLE = "key_task_title"
         const val KEY_MANUAL = "key_manual"
-        private const val CHANNEL_ID = "jarvis_agent_tasks"
+        const val KEY_RUN_TOKEN = "key_run_token"
+        private const val ALARM_CHANNEL_ID = "jarvis_task_alarms"
+        private const val KEY_APPLIED_CHANNEL_CONFIG = "alarm_channel_config"
 
         private val runningTaskIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
     }

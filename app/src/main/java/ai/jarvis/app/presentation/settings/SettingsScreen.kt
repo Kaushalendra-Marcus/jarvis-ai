@@ -78,9 +78,70 @@ fun SettingsScreen(
         keyInput = viewModel.providerKey(llmProvider)
     }
     val snackbar = remember { SnackbarHostState() }
-    // Accordion: only the tapped section opens.
-    var expanded by remember { mutableStateOf<String?>(null) }
-    fun toggle(key: String) { expanded = if (expanded == key) null else key }
+    val taskNotifications by viewModel.taskNotifications.collectAsState()
+    val taskAlarmSound by viewModel.taskAlarmSound.collectAsState()
+    val taskVibrate by viewModel.taskVibrate.collectAsState()
+    var route by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var confirmSignOutEverywhere by remember { mutableStateOf(false) }
+
+    val destinations = remember(accountEmail, llmProvider, themeMode) {
+        listOf(
+            SettingsDestination(
+                "account", "Account",
+                if (accountEmail.isNotBlank()) accountEmail else "Log in or create an account",
+                Icons.Default.Person, "login logout signup sign out email password account"
+            ),
+            SettingsDestination(
+                "mailbox", "Mailbox",
+                if (mailSource == SecurePreferences.SOURCE_DEMO) "Demo mailbox" else gmailConnectionState,
+                Icons.Default.Email, "gmail demo inbox mail sign in google"
+            ),
+            SettingsDestination(
+                "ai", "AI model", llmProvider.replaceFirstChar { it.uppercase() },
+                Icons.Default.AutoAwesome, "model gemini groq deepseek claude api key"
+            ),
+            SettingsDestination(
+                "notifications", "Notifications",
+                if (taskNotifications) "Routine alarms on" else "Routine alarms off",
+                Icons.Default.Notifications, "alarm sound vibrate notify routine task"
+            ),
+            SettingsDestination(
+                "appearance", "Appearance", themeMode.lowercase().replaceFirstChar { it.uppercase() },
+                Icons.Default.Palette, "theme dark light display"
+            ),
+            SettingsDestination(
+                "preferences", "Preferences", "Default email",
+                Icons.Default.Tune, "email default voice"
+            ),
+            SettingsDestination(
+                "performance", "Performance", "On-device latency stats",
+                Icons.Default.Speed, "stats metrics latency"
+            ),
+            SettingsDestination(
+                "permissions", "Permissions", "Microphone",
+                Icons.Default.Security, "permission mic microphone"
+            ),
+            SettingsDestination(
+                "about", "About", "Version and backend",
+                Icons.Default.Info, "version backend about"
+            )
+        )
+    }
+    val groups = remember(destinations) {
+        listOf(
+            "General" to listOf("account", "mailbox", "ai", "notifications"),
+            "Personalize" to listOf("appearance", "preferences", "performance"),
+            "Support" to listOf("permissions", "about")
+        ).map { (header, ids) -> header to destinations.filter { it.id in ids } }
+    }
+    val filtered = remember(query, destinations) {
+        val q = query.trim().lowercase()
+        if (q.isBlank()) emptyList()
+        else destinations.filter {
+            it.title.lowercase().contains(q) || it.subtitle.lowercase().contains(q) || it.keywords.contains(q)
+        }
+    }
 
     // Re-check the account each time Settings opens so a one-off network error does not stick.
     LaunchedEffect(Unit) { viewModel.refreshGmailStatus() }
@@ -110,281 +171,459 @@ fun SettingsScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ---- Account ----
-            SettingsSection(
-                title = "Account", icon = Icons.Default.Person,
-                expanded = expanded == "account", onExpand = { toggle("account") }
-            ) {
-                if (accountEmail.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            accountEmail,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Text(
-                        "Signed in on this device. Logging out ends this session; your Gmail grant and memories stay on the server.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Button(
-                        onClick = viewModel::logout,
-                        enabled = !accountBusy
-                    ) { Text(if (accountBusy) "Logging out…" else "Log out") }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = accountMode == "login",
-                            onClick = { accountMode = "login"; viewModel.clearAccountError() },
-                            label = { Text("Log in") }
-                        )
-                        FilterChip(
-                            selected = accountMode == "signup",
-                            onClick = { accountMode = "signup"; viewModel.clearAccountError() },
-                            label = { Text("Create account") }
-                        )
-                    }
-                    OutlinedTextField(
-                        value = accountEmailInput,
-                        onValueChange = { accountEmailInput = it },
-                        label = { Text("Email") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = accountPasswordInput,
-                        onValueChange = { accountPasswordInput = it },
-                        label = { Text("Password (min 8 characters)") },
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+            if (route == null) {
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search settings") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 16.dp)
+                ) {
+                    if (query.isBlank()) {
+                        groups.forEach { (header, rows) ->
+                            Text(
+                                header,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                            )
+                            rows.forEach { dest ->
+                                SettingsRow(
+                                    title = dest.title,
+                                    subtitle = dest.subtitle,
+                                    icon = dest.icon,
+                                    onClick = { route = dest.id }
                                 )
                             }
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    accountError?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Button(
-                        onClick = {
-                            if (accountMode == "signup") viewModel.signUp(accountEmailInput, accountPasswordInput)
-                            else viewModel.login(accountEmailInput, accountPasswordInput)
-                        },
-                        enabled = !accountBusy && accountEmailInput.isNotBlank() && accountPasswordInput.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (accountBusy) "Please wait…" else if (accountMode == "signup") "Create account" else "Log in") }
-                    Text(
-                        "One account per device. Gmail stays separate under Mailbox — connect it after signing in to keep both on one session.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // ---- AI ----
-            SettingsSection(
-                title = "AI model", icon = Icons.Default.AutoAwesome,
-                expanded = expanded == "ai", onExpand = { toggle("ai") }
-            ) {
-                ModelProviderPicker(
-                    providerId = llmProvider,
-                    onSelect = viewModel::setLlmProvider,
-                    modelInput = modelInput,
-                    onModelInput = { modelInput = it },
-                    onSaveModel = { viewModel.updateProviderModel(llmProvider, modelInput) },
-                    modelDirty = modelInput != viewModel.providerModel(llmProvider),
-                    keyInput = keyInput,
-                    onKeyInput = { keyInput = it },
-                    onSaveKey = { viewModel.updateProviderKey(llmProvider, keyInput) },
-                    keyDirty = keyInput != viewModel.providerKey(llmProvider),
-                    keyVisible = keyVisible,
-                    onToggleKeyVisible = { keyVisible = !keyVisible }
-                )
-            }
-
-            // ---- Appearance ----
-            SettingsSection(
-                title = "Appearance", icon = Icons.Default.Palette,
-                expanded = expanded == "appearance", onExpand = { toggle("appearance") }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
-                        Row(Modifier.padding(4.dp)) {
-                            ThemeModeIcon(
-                                selected = themeMode == "LIGHT",
-                                icon = Icons.Default.LightMode,
-                                description = "Bright",
-                                onClick = { viewModel.setThemeMode("LIGHT") }
-                            )
-                            ThemeModeIcon(
-                                selected = themeMode == "DARK",
-                                icon = Icons.Default.DarkMode,
-                                description = "Dark",
-                                onClick = { viewModel.setThemeMode("DARK") }
+                        }
+                    } else if (filtered.isEmpty()) {
+                        Text(
+                            "No settings match \"$query\".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(20.dp)
+                        )
+                    } else {
+                        filtered.forEach { dest ->
+                            SettingsRow(
+                                title = dest.title,
+                                subtitle = dest.subtitle,
+                                icon = dest.icon,
+                                onClick = { route = dest.id }
                             )
                         }
                     }
                 }
-            }
-
-            // ---- Mailbox ----
-            SettingsSection(
-                title = "Mailbox", icon = Icons.Default.Email,
-                expanded = expanded == "mailbox", onExpand = { toggle("mailbox") }
-            ) {
-                MailboxChooser(
-                    source = mailSource,
-                    connectionState = gmailConnectionState,
-                    onSelect = viewModel::selectMailSource,
-                    onSignIn = onConnectGmail,
-                    onSignOut = onDisconnectGmail,
-                    onRetry = viewModel::refreshGmailStatus,
-                    onOpenDemoMailbox = onOpenMailbox
-                )
-            }
-
-            // ---- Performance ----
-            SettingsSection(
-                title = "Performance", icon = Icons.Default.Speed,
-                expanded = expanded == "perf", onExpand = { toggle("perf") }
-            ) {
-                PerformancePanel(performance, onClear = viewModel::clearPerformanceSamples)
-            }
-
-            // ---- Permissions ----
-            SettingsSection(
-                title = "Permissions", icon = Icons.Default.Security,
-                expanded = expanded == "perms", onExpand = { toggle("perms") }
-            ) {
-                Text(
-                    "Microphone is only used for voice commands.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedButton(
-                    onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
+            } else {
+                val current = destinations.firstOrNull { it.id == route }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Open system permissions")
-                }
-            }
-
-            // ---- Preferences ----
-            SettingsSection(
-                title = "Preferences", icon = Icons.Default.Tune,
-                expanded = expanded == "prefs", onExpand = { toggle("prefs") }
-            ) {
-                OutlinedTextField(
-                    value = emailInput,
-                    onValueChange = { emailInput = it },
-                    label = { Text("Default recipient email") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                Button(
-                    onClick = { viewModel.updateDefaultEmail(emailInput) },
-                    enabled = emailInput != currentEmail
-                ) { Text("Save email") }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Spoken replies", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "Read answers aloud.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    IconButton(onClick = { route = null; query = "" }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back to settings")
                     }
-                    Switch(checked = voiceFeedback, onCheckedChange = { viewModel.setVoiceFeedback(it) })
+                    Text(
+                        current?.title ?: "Settings",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    when (route) {
+                        "account" -> AccountBody(
+                            accountEmail = accountEmail,
+                            accountBusy = accountBusy,
+                            accountError = accountError,
+                            accountMode = accountMode,
+                            onModeChange = { accountMode = it; viewModel.clearAccountError() },
+                            accountEmailInput = accountEmailInput,
+                            onEmailInput = { accountEmailInput = it },
+                            accountPasswordInput = accountPasswordInput,
+                            onPasswordInput = { accountPasswordInput = it },
+                            passwordVisible = passwordVisible,
+                            onTogglePasswordVisible = { passwordVisible = !passwordVisible },
+                            onSubmit = {
+                                if (accountMode == "signup") viewModel.signUp(accountEmailInput, accountPasswordInput)
+                                else viewModel.login(accountEmailInput, accountPasswordInput)
+                            },
+                            onLogout = viewModel::logout,
+                            onSignOutEverywhere = { confirmSignOutEverywhere = true }
+                        )
+                        "mailbox" -> MailboxChooser(
+                            source = mailSource,
+                            connectionState = gmailConnectionState,
+                            onSelect = viewModel::selectMailSource,
+                            onSignIn = onConnectGmail,
+                            onSignOut = onDisconnectGmail,
+                            onRetry = viewModel::refreshGmailStatus,
+                            onOpenDemoMailbox = onOpenMailbox
+                        )
+                        "ai" -> ModelProviderPicker(
+                            providerId = llmProvider,
+                            onSelect = viewModel::setLlmProvider,
+                            modelInput = modelInput,
+                            onModelInput = { modelInput = it },
+                            onSaveModel = { viewModel.updateProviderModel(llmProvider, modelInput) },
+                            modelDirty = modelInput != viewModel.providerModel(llmProvider),
+                            keyInput = keyInput,
+                            onKeyInput = { keyInput = it },
+                            onSaveKey = { viewModel.updateProviderKey(llmProvider, keyInput) },
+                            keyDirty = keyInput != viewModel.providerKey(llmProvider),
+                            keyVisible = keyVisible,
+                            onToggleKeyVisible = { keyVisible = !keyVisible }
+                        )
+                        "notifications" -> {
+                            SwitchRow(
+                                title = "Routine notifications",
+                                subtitle = "Sound an alarm when scheduled routines finish.",
+                                checked = taskNotifications,
+                                onCheckedChange = viewModel::setTaskNotifications
+                            )
+                            SwitchRow(
+                                title = "Alarm sound",
+                                subtitle = "Play the notification sound with the alarm.",
+                                checked = taskAlarmSound,
+                                onCheckedChange = viewModel::setTaskAlarmSound,
+                                enabled = taskNotifications
+                            )
+                            SwitchRow(
+                                title = "Vibrate",
+                                subtitle = "Vibrate with the routine alarm.",
+                                checked = taskVibrate,
+                                onCheckedChange = viewModel::setTaskVibrate,
+                                enabled = taskNotifications
+                            )
+                            SwitchRow(
+                                title = "Spoken replies",
+                                subtitle = "Read answers aloud.",
+                                checked = voiceFeedback,
+                                onCheckedChange = viewModel::setVoiceFeedback
+                            )
+                        }
+                        "appearance" -> Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Row(Modifier.padding(4.dp)) {
+                                    ThemeModeIcon(
+                                        selected = themeMode == "LIGHT",
+                                        icon = Icons.Default.LightMode,
+                                        description = "Bright",
+                                        onClick = { viewModel.setThemeMode("LIGHT") }
+                                    )
+                                    ThemeModeIcon(
+                                        selected = themeMode == "DARK",
+                                        icon = Icons.Default.DarkMode,
+                                        description = "Dark",
+                                        onClick = { viewModel.setThemeMode("DARK") }
+                                    )
+                                }
+                            }
+                        }
+                        "preferences" -> {
+                            OutlinedTextField(
+                                value = emailInput,
+                                onValueChange = { emailInput = it },
+                                label = { Text("Default recipient email") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Button(
+                                onClick = { viewModel.updateDefaultEmail(emailInput) },
+                                enabled = emailInput != currentEmail
+                            ) { Text("Save email") }
+                        }
+                        "performance" -> PerformancePanel(performance, onClear = viewModel::clearPerformanceSamples)
+                        "permissions" -> {
+                            Text(
+                                "Microphone is only used for voice commands.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }
+                            ) {
+                                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Open system permissions")
+                            }
+                        }
+                        "about" -> {
+                            AboutRow(label = "Version", value = ai.jarvis.app.BuildConfig.VERSION_NAME)
+                            AboutRow(label = "Backend", value = ai.jarvis.app.BuildConfig.API_BASE_URL)
+                            Text(
+                                "Jarvis runs on-device with an optional backend for Gmail. Secrets stay in encrypted storage.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
+        if (confirmSignOutEverywhere) {
+            AlertDialog(
+                onDismissRequest = { confirmSignOutEverywhere = false },
+                title = { Text("Sign out everywhere?", fontWeight = FontWeight.Bold) },
+                text = { Text("Ends your Jarvis sessions on every device. You will stay signed in nowhere until you log in again.") },
+                confirmButton = {
+                    Button(onClick = {
+                        confirmSignOutEverywhere = false
+                        viewModel.signOutEverywhere()
+                    }) { Text("Sign out everywhere") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmSignOutEverywhere = false }) { Text("Cancel") }
+                }
+            )
+        }
+    }
+}
+
+/** X-style settings navigation: icon + title + subtitle + chevron. */
+private data class SettingsDestination(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val keywords: String
+)
+
+@Composable
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 13.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
 @Composable
-private fun SettingsSection(
+private fun SwitchRow(
     title: String,
-    icon: ImageVector,
-    expanded: Boolean,
-    onExpand: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Color.Transparent,
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp)
     ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onExpand)
-                    .padding(16.dp)
-            ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    content = content
-                )
-            }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
-/** Small bright/dark toggle icon. No text, no system mode. */
+@Composable
+private fun AboutRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun AccountBody(
+    accountEmail: String,
+    accountBusy: Boolean,
+    accountError: String?,
+    accountMode: String,
+    onModeChange: (String) -> Unit,
+    accountEmailInput: String,
+    onEmailInput: (String) -> Unit,
+    accountPasswordInput: String,
+    onPasswordInput: (String) -> Unit,
+    passwordVisible: Boolean,
+    onTogglePasswordVisible: () -> Unit,
+    onSubmit: () -> Unit,
+    onLogout: () -> Unit,
+    onSignOutEverywhere: () -> Unit
+) {
+    if (accountEmail.isNotBlank()) {
+        Text(
+            accountEmail,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            "Signed in on this device. Logging out ends this session; your Gmail grant and memories stay on the server.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onLogout, enabled = !accountBusy) {
+                Text(if (accountBusy) "Logging out…" else "Log out")
+            }
+            OutlinedButton(onClick = onSignOutEverywhere, enabled = !accountBusy) {
+                Text("Sign out everywhere")
+            }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = accountMode == "login",
+                onClick = { onModeChange("login") },
+                label = { Text("Log in") }
+            )
+            FilterChip(
+                selected = accountMode == "signup",
+                onClick = { onModeChange("signup") },
+                label = { Text("Create account") }
+            )
+        }
+        OutlinedTextField(
+            value = accountEmailInput,
+            onValueChange = onEmailInput,
+            label = { Text("Email") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = accountPasswordInput,
+            onValueChange = onPasswordInput,
+            label = { Text("Password (min 8 characters)") },
+            singleLine = true,
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = onTogglePasswordVisible) {
+                    Icon(
+                        if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
+                }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
+        accountError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+        Button(
+            onClick = onSubmit,
+            enabled = !accountBusy && accountEmailInput.isNotBlank() && accountPasswordInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (accountBusy) "Please wait…" else if (accountMode == "signup") "Create account" else "Log in") }
+        Text(
+            "One account per device. Gmail stays separate under Mailbox — connect it after signing in to keep both on one session.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun ThemeModeIcon(
     selected: Boolean,

@@ -26,7 +26,7 @@ class SecurePreferences(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }.getOrNull()
-    private val preferences = context.getSharedPreferences("agent_settings", Context.MODE_PRIVATE)
+    private val preferences = context.getSharedPreferences(PREFS_SETTINGS_FILE, Context.MODE_PRIVATE)
 
     val isSecureStorageAvailable: Boolean get() = securePreferences != null
 
@@ -186,6 +186,31 @@ class SecurePreferences(context: Context) {
             .apply()
     }
 
+    // ---- Routine alarms (Settings → Notifications). Plain prefs: not secrets. ----
+    private val _taskNotifications = MutableStateFlow(preferences.getBoolean(KEY_TASK_NOTIFICATIONS, true))
+    val taskNotificationsEnabled: StateFlow<Boolean> = _taskNotifications.asStateFlow()
+
+    fun setTaskNotificationsEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_TASK_NOTIFICATIONS, enabled).apply()
+        _taskNotifications.value = enabled
+    }
+
+    private val _taskAlarmSound = MutableStateFlow(preferences.getBoolean(KEY_TASK_ALARM_SOUND, true))
+    val taskAlarmSoundEnabled: StateFlow<Boolean> = _taskAlarmSound.asStateFlow()
+
+    fun setTaskAlarmSoundEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_TASK_ALARM_SOUND, enabled).apply()
+        _taskAlarmSound.value = enabled
+    }
+
+    private val _taskVibrate = MutableStateFlow(preferences.getBoolean(KEY_TASK_VIBRATE, true))
+    val taskVibrateEnabled: StateFlow<Boolean> = _taskVibrate.asStateFlow()
+
+    fun setTaskVibrateEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_TASK_VIBRATE, enabled).apply()
+        _taskVibrate.value = enabled
+    }
+
     private val _themeMode = MutableStateFlow(preferences.getString(KEY_THEME_MODE, "SYSTEM") ?: "SYSTEM")
     /** One of SYSTEM, LIGHT, DARK. */
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
@@ -248,5 +273,10 @@ class SecurePreferences(context: Context) {
         private const val KEY_BACKEND_SESSION_EXPIRES_AT = "backend_session_expires_at"
         private const val KEY_USER_EMAIL = "user_account_email"
         private const val KEY_VOICE_FEEDBACK = "voice_feedback"
+        // Plain "agent_settings" file + routine-alarm keys (also read by the worker).
+        const val PREFS_SETTINGS_FILE = "agent_settings"
+        const val KEY_TASK_NOTIFICATIONS = "task_notifications"
+        const val KEY_TASK_ALARM_SOUND = "task_alarm_sound"
+        const val KEY_TASK_VIBRATE = "task_vibrate"
     }
 }

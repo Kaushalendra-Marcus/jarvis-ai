@@ -18,6 +18,8 @@ import ai.jarvis.app.domain.schedule.CronSchedule
 import ai.jarvis.app.domain.model.TaskExecutionRecord
 import ai.jarvis.app.domain.repository.TaskSchedulerRepository
 import ai.jarvis.app.service.background.ScheduledTaskWorker
+import ai.jarvis.app.service.background.TaskAlarmScheduler
+import ai.jarvis.app.service.background.TaskRunGate
 import ai.jarvis.app.service.background.TaskSchedulingPolicy
 import ai.jarvis.app.service.background.TaskWorkSpec
 import kotlinx.coroutines.flow.Flow
@@ -53,7 +55,7 @@ class TaskSchedulerRepositoryImpl(
 
         val stored = task.copy(cronExpression = schedule.expression, nextRunEpoch = nextRunEpoch, isEnabled = true)
         taskDao.insertTask(ScheduledTaskEntity.fromDomain(stored))
-        enqueueRun(stored, nextRunEpoch - now, ExistingWorkPolicy.REPLACE)
+        enqueueRun(stored, nextRunEpoch - now, ExistingWorkPolicy.REPLACE, runEpochMillis = nextRunEpoch)
     }
 
     override suspend fun scheduleNextRun(id: String) {
@@ -63,7 +65,7 @@ class TaskSchedulerRepositoryImpl(
         val next = CronSchedule.parse(task.cronExpression)?.nextAfter(now) ?: return
         taskDao.updateNextRun(id, next)
         // APPEND_OR_REPLACE queues behind the run that is calling this, instead of cancelling it.
-        enqueueRun(task, next - now, ExistingWorkPolicy.APPEND_OR_REPLACE)
+        enqueueRun(task, next - now, ExistingWorkPolicy.APPEND_OR_REPLACE, runEpochMillis = next)
     }
 
     override suspend fun ensureScheduled() {
@@ -77,12 +79,17 @@ class TaskSchedulerRepositoryImpl(
                 scheduleTask(task.copy(cronExpression = schedule.expression))
             } else {
                 taskDao.updateNextRun(task.id, next)
-                enqueueRun(task, next - now, ExistingWorkPolicy.KEEP)
+                enqueueRun(task, next - now, ExistingWorkPolicy.KEEP, runEpochMillis = next)
             }
         }
     }
 
-    private fun enqueueRun(task: ScheduledTask, delayMillis: Long, policy: ExistingWorkPolicy) {
+    private fun enqueueRun(
+        task: ScheduledTask,
+        delayMillis: Long,
+        policy: ExistingWorkPolicy,
+        runEpochMillis: Long
+    ) {
         val spec = TaskSchedulingPolicy.forScheduledTask(
             taskId = task.id,
             initialDelayMillis = delayMillis,
@@ -90,17 +97,22 @@ class TaskSchedulerRepositoryImpl(
         )
         val request = OneTimeWorkRequestBuilder<ScheduledTaskWorker>()
             .setInitialDelay(spec.initialDelayMillis, TimeUnit.MILLISECONDS)
-            .setInputData(inputDataFor(task))
+            .setInputData(inputDataFor(task, runEpochMillis))
             .setConstraints(constraintsFor(spec))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, spec.backoffSeconds, TimeUnit.SECONDS)
             .addTag("task_${task.id}")
             .build()
         workManager.enqueueUniqueWork(spec.uniqueWorkName, policy, request)
+        // The run token lets the exact alarm and the WorkManager chain race safely:
+        // only the first to claim it in TaskRunGate executes.
+        TaskRunGate.expect(task.id, runEpochMillis)
+        TaskAlarmScheduler.scheduleExact(context, task.id, runEpochMillis, runEpochMillis)
     }
 
     override suspend fun updateTask(task: ScheduledTask) {
         workManager.cancelUniqueWork(TaskSchedulingPolicy.forScheduledTask(task.id, 0L, task.isRecurring).uniqueWorkName)
         workManager.cancelUniqueWork(TaskSchedulingPolicy.forManualTrigger(task.id).uniqueWorkName)
+        TaskAlarmScheduler.cancel(context, task.id)
         // Editing the clock time keeps the day rule (weekdays, Mondays, ...) and changes only the time.
         val schedule = CronSchedule.parse(task.cronExpression)
         val moved = if (schedule?.fixedTime != null && schedule.fixedTime != (task.hourOfDay to task.minute)) {
@@ -156,11 +168,14 @@ class TaskSchedulerRepositoryImpl(
     private fun cancelWork(taskId: String, isRecurring: Boolean) {
         workManager.cancelUniqueWork(TaskSchedulingPolicy.forScheduledTask(taskId, 0L, isRecurring).uniqueWorkName)
         workManager.cancelUniqueWork(TaskSchedulingPolicy.forManualTrigger(taskId).uniqueWorkName)
+        TaskAlarmScheduler.cancel(context, taskId)
     }
 
     override suspend fun triggerTaskNow(id: String): String {
         val task = taskDao.getTaskById(id) ?: return "Task not found"
         val spec = TaskSchedulingPolicy.forManualTrigger(task.id)
+        // Fresh token: a manual run always claims its own execution.
+        val manualToken = System.currentTimeMillis()
 
         val workRequest = OneTimeWorkRequestBuilder<ScheduledTaskWorker>()
             .setInputData(
@@ -168,7 +183,8 @@ class TaskSchedulerRepositoryImpl(
                     ScheduledTaskWorker.KEY_TASK_ID to task.id,
                     ScheduledTaskWorker.KEY_PROMPT_ACTION to task.promptAction,
                     ScheduledTaskWorker.KEY_TASK_TITLE to task.title,
-                    ScheduledTaskWorker.KEY_MANUAL to true
+                    ScheduledTaskWorker.KEY_MANUAL to true,
+                    ScheduledTaskWorker.KEY_RUN_TOKEN to manualToken
                 )
             )
             .setConstraints(constraintsFor(spec))
@@ -178,6 +194,7 @@ class TaskSchedulerRepositoryImpl(
 
         // KEEP prevents tapping "Trigger Now"/"Retry" repeatedly from queuing duplicate runs.
         workManager.enqueueUniqueWork(spec.uniqueWorkName, ExistingWorkPolicy.KEEP, workRequest)
+        TaskRunGate.expect(task.id, manualToken)
         return "Task '${task.title}' queued. Android may defer background work while the device is idle."
     }
 
@@ -201,13 +218,14 @@ class TaskSchedulerRepositoryImpl(
         taskDao.updateExecutionStatus(id, lastExecutionEpoch, status, nextRunEpoch, enabled)
     }
 
-    private fun inputDataFor(task: ScheduledTask) =
-        inputDataFor(task.id, task.promptAction, task.title)
+    private fun inputDataFor(task: ScheduledTask, runEpochMillis: Long) =
+        inputDataFor(task.id, task.promptAction, task.title, runEpochMillis)
 
-    private fun inputDataFor(taskId: String, promptAction: String, title: String) = workDataOf(
+    private fun inputDataFor(taskId: String, promptAction: String, title: String, runToken: Long = 0L) = workDataOf(
         ScheduledTaskWorker.KEY_TASK_ID to taskId,
         ScheduledTaskWorker.KEY_PROMPT_ACTION to promptAction,
-        ScheduledTaskWorker.KEY_TASK_TITLE to title
+        ScheduledTaskWorker.KEY_TASK_TITLE to title,
+        ScheduledTaskWorker.KEY_RUN_TOKEN to runToken
     )
 
     private fun constraintsFor(spec: TaskWorkSpec): Constraints = Constraints.Builder()

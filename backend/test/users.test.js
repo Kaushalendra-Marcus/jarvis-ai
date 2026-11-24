@@ -74,6 +74,7 @@ function makeFakePrisma() {
         let count = 0;
         for (const session of state.sessions.values()) {
           if (where.tokenHash && session.tokenHash !== where.tokenHash) continue;
+          if (where.userId && session.userId !== where.userId) continue;
           if (where.revokedAt === null && session.revokedAt !== null) continue;
           Object.assign(session, data);
           count += 1;
@@ -208,4 +209,47 @@ test("oauth exchange with a user linkToken keeps one session and links gmail", a
   // Single-use code is consumed: replay is rejected.
   const replay = await post(base, "/api/v1/auth/exchange", { code: googleCode });
   assert.equal(replay.status, 401);
+});
+
+test("sign out everywhere revokes every session of the user", async t => {
+  const fake = makeFakePrisma();
+  const { server, base } = await startTestServer(fake);
+  t.after(() => server.close());
+
+  const first = await post(base, "/api/v1/users/signup", { email: "multi@example.com", password: "s3cure-pass" });
+  const token1 = (await first.json()).accessToken;
+  const second = await post(base, "/api/v1/users/login", { email: "multi@example.com", password: "s3cure-pass" });
+  const token2 = (await second.json()).accessToken;
+
+  const me = token => fetch(`${base}/api/v1/users/me`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  assert.equal((await me(token1)).status, 200);
+  assert.equal((await me(token2)).status, 200);
+
+  const signOutAll = await fetch(`${base}/api/v1/users/sessions`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token1}` }
+  });
+  assert.equal(signOutAll.status, 204);
+  assert.equal((await me(token1)).status, 401);
+  assert.equal((await me(token2)).status, 401);
+
+  // Guest (Google-only, no app user) sessions are rejected with the login prompt.
+  const guestToken = "z".repeat(43);
+  fake.state.sessions.set(hashOpaqueToken(guestToken), {
+    id: "guest-session",
+    tokenHash: hashOpaqueToken(guestToken),
+    accountId: "account-9",
+    accountEmail: "guest@gmail.com",
+    userId: null,
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 300_000)
+  });
+  const guest = await fetch(`${base}/api/v1/users/sessions`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${guestToken}` }
+  });
+  assert.equal(guest.status, 401);
+  assert.match((await guest.json()).error, /Log in with your Jarvis account/);
 });

@@ -100,4 +100,21 @@ router.post("/logout", requireDeviceSession, async (req, res, next) => {
   }
 });
 
+/** Sign out everywhere: revokes every live session of the current app user. */
+router.delete("/sessions", requireDeviceSession, async (req, res, next) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Log in with your Jarvis account first." });
+    }
+    const db = dbOf(req);
+    await db.deviceSession.updateMany({
+      where: { userId: req.userId, revokedAt: null },
+      data: { revokedAt: new Date() }
+    });
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

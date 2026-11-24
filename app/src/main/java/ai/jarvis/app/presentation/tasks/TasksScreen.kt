@@ -190,8 +190,22 @@ fun EditScheduledTaskDialog(
 ) {
     var title by remember(task.id) { mutableStateOf(task.title) }
     var action by remember(task.id) { mutableStateOf(task.promptAction) }
-    var hour by remember(task.id) { mutableStateOf(task.hourOfDay.toString()) }
+    // 12-hour clock in the UI; stored as 24-hour hourOfDay on save.
+    var hour12 by remember(task.id) {
+        mutableStateOf((task.hourOfDay % 12).let { if (it == 0) "12" else it.toString() })
+    }
+    var isPm by remember(task.id) { mutableStateOf(task.hourOfDay >= 12) }
     var minute by remember(task.id) { mutableStateOf(task.minute.toString()) }
+    fun hourOfDay24(): Int? {
+        val h = hour12.toIntOrNull() ?: return null
+        if (h !in 1..12) return null
+        return when {
+            h == 12 && !isPm -> 0
+            h == 12 -> 12
+            isPm -> h + 12
+            else -> h
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit routine", fontWeight = FontWeight.Bold) },
@@ -215,9 +229,9 @@ fun EditScheduledTaskDialog(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = hour,
-                        onValueChange = { hour = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Hour") },
+                        value = hour12,
+                        onValueChange = { hour12 = it.filter(Char::isDigit).take(2) },
+                        label = { Text("Hour (1-12)") },
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f)
                     )
@@ -229,14 +243,28 @@ fun EditScheduledTaskDialog(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !isPm,
+                        onClick = { isPm = false },
+                        label = { Text("AM") }
+                    )
+                    FilterChip(
+                        selected = isPm,
+                        onClick = { isPm = true },
+                        label = { Text("PM") }
+                    )
+                }
             }
         },
         confirmButton = {
+            val h24 = hourOfDay24()
+            val m = minute.toIntOrNull()
             Button(
                 onClick = {
-                    onSave(task.copy(title = title.trim(), promptAction = action.trim(), hourOfDay = hour.toInt(), minute = minute.toInt()))
+                    onSave(task.copy(title = title.trim(), promptAction = action.trim(), hourOfDay = h24!!, minute = m!!))
                 },
-                enabled = title.isNotBlank() && action.isNotBlank() && (hour.toIntOrNull() ?: 24) in 0..23 && (minute.toIntOrNull() ?: 60) in 0..59
+                enabled = title.isNotBlank() && action.isNotBlank() && h24 != null && m != null && m in 0..59
             ) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
@@ -276,7 +304,7 @@ fun ScheduledTaskCard(
                     Text(
                         text = if (task.isRecurring) {
                             ai.jarvis.app.domain.schedule.CronSchedule.parse(task.cronExpression)?.describe()
-                                ?: "Daily ${String.format("%02d:%02d", task.hourOfDay, task.minute)}"
+                                ?: "Daily ${TimeUtils.formatHourMinute(task.hourOfDay, task.minute)}"
                         } else "One-time",
                         color = primary,
                         fontWeight = FontWeight.Bold,

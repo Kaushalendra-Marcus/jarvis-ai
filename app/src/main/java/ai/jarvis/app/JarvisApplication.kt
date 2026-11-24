@@ -75,6 +75,7 @@ class JarvisApplication : Application() {
         val backendApi = BackendApiClient(BuildConfig.API_BASE_URL)
         backendAuthManager = BackendAuthManager(backendApi, securePreferences)
         userAccountManager = UserAccountManager(backendApi, securePreferences)
+        ai.jarvis.app.service.background.TaskRunGate.init(this)
         mailSourceManager = MailSourceManager(securePreferences, backendAuthManager)
         // Wake the hosted backend early so the first Gmail action is not slow.
         applicationScope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)

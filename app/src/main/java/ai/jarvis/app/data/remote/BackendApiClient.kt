@@ -154,6 +154,16 @@ class BackendApiClient(
         )
     }
 
+    /** Revokes every live session of the current app user, on all devices. */
+    suspend fun revokeAllSessions(accessToken: String): Unit = withContext(Dispatchers.IO) {
+        execute(
+            authenticatedRequest("$baseUrl/api/v1/users/sessions", accessToken)
+                .delete()
+                .build(),
+            expectJson = false
+        )
+    }
+
     suspend fun refreshSession(accessToken: String): BackendSession = withContext(Dispatchers.IO) {
         val response = execute(
             authenticatedRequest("$baseUrl/api/v1/auth/session/refresh", accessToken)

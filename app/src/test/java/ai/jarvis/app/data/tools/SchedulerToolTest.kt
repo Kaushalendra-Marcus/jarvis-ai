@@ -71,7 +71,7 @@ class SchedulerToolTest {
             mapOf("promptAction" to "Summarize my emails", "timeExpression" to "8:30 AM", "recurrence" to "weekdays")
         )
         assertTrue(result.isSuccess)
-        assertTrue(result.output.contains("Weekdays at 08:30"))
+        assertTrue(result.output.contains("Weekdays at 8:30 AM"))
         val task = repo.scheduled.single()
         assertEquals("30 8 * * 1-5", task.cronExpression)
         assertTrue(task.isRecurring)

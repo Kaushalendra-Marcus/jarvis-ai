@@ -83,6 +83,21 @@ class SettingsViewModel(
         }
     }
 
+    fun signOutEverywhere() {
+        viewModelScope.launch {
+            if (userAccountManager.signOutEverywhere()) backendAuthManager.refreshConnectionState()
+        }
+    }
+
+    // ---- Routine notifications (Settings → Notifications) ----
+    val taskNotifications: StateFlow<Boolean> = securePreferences.taskNotificationsEnabled
+    val taskAlarmSound: StateFlow<Boolean> = securePreferences.taskAlarmSoundEnabled
+    val taskVibrate: StateFlow<Boolean> = securePreferences.taskVibrateEnabled
+
+    fun setTaskNotifications(enabled: Boolean) = securePreferences.setTaskNotificationsEnabled(enabled)
+    fun setTaskAlarmSound(enabled: Boolean) = securePreferences.setTaskAlarmSoundEnabled(enabled)
+    fun setTaskVibrate(enabled: Boolean) = securePreferences.setTaskVibrateEnabled(enabled)
+
     val themeMode: StateFlow<String> = securePreferences.themeMode
     val usesBuiltInKey: Boolean get() = securePreferences.hasBuiltInGeminiKey
 

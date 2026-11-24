@@ -110,6 +110,25 @@ class UserAccountManager(
         }
     }
 
+    /** Revokes this user's sessions on every device, then signs out here too. */
+    suspend fun signOutEverywhere(): Boolean {
+        _busy.value = true
+        _error.value = null
+        try {
+            val token = securePreferences.getBackendAccessToken()?.takeIf { it.isNotBlank() }
+                ?: return false
+            try {
+                api.revokeAllSessions(token)
+            } catch (error: Exception) {
+                return fail(friendlyMessage(error))
+            }
+            signOutLocally()
+            return true
+        } finally {
+            _busy.value = false
+        }
+    }
+
     /** Drops local identity without a network call (backend sign-out, expiry). */
     fun signOutLocally() {
         securePreferences.clearBackendAccessToken()
