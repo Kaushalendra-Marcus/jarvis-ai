@@ -117,10 +117,3 @@ fun JarvisTheme(
     }
     MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }
-
-/** Legacy alias. */
-@Composable
-fun JarvisTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) = JarvisTheme(darkTheme, content)

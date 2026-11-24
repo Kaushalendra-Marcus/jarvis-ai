@@ -248,8 +248,7 @@ private fun SettingsSection(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = Color.Transparent,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {

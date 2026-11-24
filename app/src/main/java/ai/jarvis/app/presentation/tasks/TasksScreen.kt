@@ -1,7 +1,7 @@
 package ai.jarvis.app.presentation.tasks
 
 import android.widget.Toast
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -128,7 +128,6 @@ fun TasksScreen(
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(tasks, key = { it.id }) { task ->
@@ -143,6 +142,7 @@ fun TasksScreen(
                             }
                         }
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
                 item { Spacer(modifier = Modifier.height(30.dp)) }
             }
@@ -256,44 +256,32 @@ fun ScheduledTaskCard(
     val isFailed = executionState == TaskExecutionState.FAILED
     val primary = MaterialTheme.colorScheme.primary
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Surface(
-                    color = primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            if (task.isRecurring) Icons.Default.Repeat else Icons.Default.Schedule,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp),
-                            tint = primary
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (task.isRecurring) {
-                                ai.jarvis.app.domain.schedule.CronSchedule.parse(task.cronExpression)?.describe()
-                                    ?: "Daily ${String.format("%02d:%02d", task.hourOfDay, task.minute)}"
-                            } else "One-time",
-                            color = primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        )
-                    }
+                    Icon(
+                        if (task.isRecurring) Icons.Default.Repeat else Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (task.isRecurring) {
+                            ai.jarvis.app.domain.schedule.CronSchedule.parse(task.cronExpression)?.describe()
+                                ?: "Daily ${String.format("%02d:%02d", task.hourOfDay, task.minute)}"
+                        } else "One-time",
+                        color = primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -331,7 +319,7 @@ fun ScheduledTaskCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ExecutionStatusChip(executionState)
+                    StatusLine(executionState)
                     Spacer(modifier = Modifier.weight(1f))
                     task.lastExecutionEpoch?.let { epoch ->
                         Text(
@@ -430,30 +418,20 @@ fun ScheduledTaskCard(
             }
         }
     }
-}
 
 @Composable
-private fun ExecutionStatusChip(state: TaskExecutionState) {
-    val (label, color, icon) = when (state) {
-        TaskExecutionState.SUCCESS -> Triple("Success", SuccessGreen, Icons.Default.CheckCircle)
-        TaskExecutionState.FAILED -> Triple("Failed", ErrorRed, Icons.Default.ErrorOutline)
-        TaskExecutionState.RETRYING -> Triple("Retrying", WarningOrange, Icons.Default.Sync)
-        TaskExecutionState.SKIPPED -> Triple("Skipped", MaterialTheme.colorScheme.onSurfaceVariant, Icons.Default.Info)
+private fun StatusLine(state: TaskExecutionState) {
+    val (label, color) = when (state) {
+        TaskExecutionState.SUCCESS -> "Success" to SuccessGreen
+        TaskExecutionState.FAILED -> "Failed" to ErrorRed
+        TaskExecutionState.RETRYING -> "Retrying" to WarningOrange
+        TaskExecutionState.SKIPPED -> "Skipped" to MaterialTheme.colorScheme.onSurfaceVariant
         TaskExecutionState.NONE -> return
     }
-
-    Surface(
-        color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(label, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).background(color, CircleShape))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(label, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -478,53 +456,49 @@ private fun TaskHistoryList(history: List<TaskExecutionRecord>) {
     }
 
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         items(history, key = { it.id }) { record ->
             var expanded by remember(record.id) { mutableStateOf(false) }
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
                     .clickable { expanded = !expanded }
+                    .padding(vertical = 12.dp)
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            record.taskTitle,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ExecutionStatusChip(record.state)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        relativeTime(record.startedAt) + " · took " + formatDuration(record.durationMs) +
-                            if (record.attempt > 1) " · try ${record.attempt}" else "",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        record.taskTitle,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                    if (record.message.isNotBlank() || record.state != TaskExecutionState.SUCCESS) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ExecutionLogContent(
-                            state = record.state,
-                            message = record.message,
-                            collapsedLines = if (expanded) Int.MAX_VALUE else 4
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    StatusLine(record.state)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    relativeTime(record.startedAt) + " · took " + formatDuration(record.durationMs) +
+                        if (record.attempt > 1) " · try ${record.attempt}" else "",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (record.message.isNotBlank() || record.state != TaskExecutionState.SUCCESS) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExecutionLogContent(
+                        state = record.state,
+                        message = record.message,
+                        collapsedLines = if (expanded) Int.MAX_VALUE else 4
+                    )
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
         item { Spacer(modifier = Modifier.height(30.dp)) }
     }
