@@ -48,7 +48,12 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.VolumeOff
@@ -63,7 +68,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -77,6 +81,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -95,6 +100,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
 import ai.jarvis.app.R
 import ai.jarvis.app.core.util.TimeUtils
 import ai.jarvis.app.domain.model.AgentMessage
@@ -142,8 +148,10 @@ fun ChatScreen(
     val modelLabel by viewModel.llmLabel.collectAsState()
 
     var draft by rememberSaveable { mutableStateOf("") }
-    var showHistory by remember { mutableStateOf(false) }
     var chatToDelete by remember { mutableStateOf<ai.jarvis.app.domain.repository.ConversationInfo?>(null) }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    fun closeDrawer() = drawerScope.launch { drawerState.close() }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.startVoiceInput()
@@ -180,8 +188,105 @@ fun ChatScreen(
         }
     }
 
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        "Chats",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { closeDrawer() }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close history")
+                    }
+                }
+                Button(
+                    onClick = {
+                        viewModel.newConversation()
+                        draft = ""
+                        closeDrawer()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("New chat")
+                }
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(4.dp))
+                if (conversations.isEmpty()) {
+                    Text(
+                        "No chats yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(conversations, key = { it.id }) { chat ->
+                            NavigationDrawerItem(
+                                label = {
+                                    Column {
+                                        Text(
+                                            chat.title,
+                                            fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (chat.preview.isNotBlank()) {
+                                            Text(
+                                                chat.preview,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            TimeUtils.formatDateTime(chat.updatedAt),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                },
+                                selected = chat.id == activeId,
+                                onClick = {
+                                    viewModel.openConversation(chat.id)
+                                    draft = ""
+                                    closeDrawer()
+                                },
+                                badge = {
+                                    IconButton(onClick = { chatToDelete = chat }) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Delete chat",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(19.dp)
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    ) {
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Header: back · title + model · speaker · history
+        // Header: back · title + model · speaker · menu
         Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
             Row(
                 Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -210,8 +315,8 @@ fun ChatScreen(
                         tint = if (voiceOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = { showHistory = true }) {
-                    Icon(Icons.Default.History, contentDescription = "Chats")
+                IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
+                    Icon(Icons.Default.Menu, contentDescription = "Chat history")
                 }
             }
         }
@@ -284,24 +389,6 @@ fun ChatScreen(
             canSend = draft.isNotBlank() && !isProcessing
         )
     }
-
-    if (showHistory) {
-        ConversationsSheet(
-            conversations = conversations,
-            activeId = activeId,
-            onDismiss = { showHistory = false },
-            onNew = {
-                viewModel.newConversation()
-                draft = ""
-                showHistory = false
-            },
-            onOpen = {
-                viewModel.openConversation(it)
-                draft = ""
-                showHistory = false
-            },
-            onDelete = { chatToDelete = it }
-        )
     }
 
     chatToDelete?.let { chat ->
@@ -328,77 +415,6 @@ fun ChatScreen(
             onConfirm = { edited -> viewModel.onConfirmAction(true, edited) },
             onDismiss = { viewModel.onConfirmAction(false) }
         )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ConversationsSheet(
-    conversations: List<ai.jarvis.app.domain.repository.ConversationInfo>,
-    activeId: String?,
-    onDismiss: () -> Unit,
-    onNew: () -> Unit,
-    onOpen: (String) -> Unit,
-    onDelete: (ai.jarvis.app.domain.repository.ConversationInfo) -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Chats", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = onNew) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("New chat")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (conversations.isEmpty()) {
-                Text(
-                    "No chats yet.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                conversations.forEach { chat ->
-                    val active = chat.id == activeId
-                    Surface(
-                        onClick = { onOpen(chat.id) },
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (active) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        else MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(
-                            if (active) 2.dp else 1.dp,
-                            if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                    ) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(chat.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (chat.preview.isNotBlank()) {
-                                    Text(
-                                        chat.preview,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Text(
-                                    TimeUtils.formatDateTime(chat.updatedAt),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                )
-                            }
-                            IconButton(onClick = { onDelete(chat) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete chat", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(19.dp))
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-        }
     }
 }
 
