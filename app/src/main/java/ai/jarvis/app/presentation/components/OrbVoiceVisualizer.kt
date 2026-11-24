@@ -9,17 +9,25 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import android.provider.Settings
 import ai.jarvis.app.presentation.theme.JarvisEye
 import ai.jarvis.app.presentation.theme.JarvisPrimary
 import ai.jarvis.app.presentation.theme.JarvisSpeck
@@ -57,14 +65,22 @@ fun OrbVoiceVisualizer(
         label = "orbEnergy"
     )
 
+    // Reduced motion: freeze looping motion, keep state-driven levels.
+    val context = LocalContext.current
+    val frozen = remember(context) {
+        runCatching {
+            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        }.getOrDefault(1f) == 0f
+    }
+
     val life = rememberInfiniteTransition(label = "orbLife")
-    val float by life.animateFloat(
+    val floatRaw by life.animateFloat(
         initialValue = 0f,
         targetValue = (PI * 2).toFloat(),
         animationSpec = infiniteRepeatable(tween(7600, easing = LinearEasing)),
         label = "float"
     )
-    val shimmer by life.animateFloat(
+    val shimmerRaw by life.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -72,6 +88,15 @@ fun OrbVoiceVisualizer(
             repeatMode = RepeatMode.Reverse
         ),
         label = "shimmer"
+    )
+    val float = if (frozen) 0f else floatRaw
+    val shimmer = if (frozen) 0.5f else shimmerRaw
+
+    // Gentle entrance pop whenever the voice state changes.
+    val popScale by animateFloatAsState(
+        targetValue = if (mode == VoiceMode.IDLE) 1f else 1.05f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 260f),
+        label = "orbPop"
     )
 
     // Mode character: direction + speed + wave shape of the disturbance.
@@ -98,7 +123,15 @@ fun OrbVoiceVisualizer(
         else -> 3f
     }
 
-    Box(modifier, contentAlignment = Alignment.Center) {
+    Box(
+        modifier
+            .graphicsLayer {
+                scaleX = popScale
+                scaleY = popScale
+            }
+            .clipToBounds(),
+        contentAlignment = Alignment.Center
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val c = center
             val shortSide = min(size.width, size.height)
@@ -132,6 +165,36 @@ fun OrbVoiceVisualizer(
                 center = c,
                 style = Stroke(width = 1.2f)
             )
+
+            // Reactive core: brightens and swells with voice energy.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0f to JarvisEye.copy(alpha = 0.22f + level * 0.45f),
+                    0.55f to dotColorTop.copy(alpha = 0.10f + level * 0.20f),
+                    1f to Color.Transparent,
+                    center = c,
+                    radius = r * (0.72f + level * 0.12f)
+                ),
+                radius = r * (0.72f + level * 0.12f),
+                center = c
+            )
+
+            // Listening gets a slow dashed orbit — a visible "I'm hearing you".
+            if (mode == VoiceMode.LISTENING) {
+                val orbit = r * 1.22f
+                drawArc(
+                    color = dotColorTop.copy(alpha = 0.35f + level * 0.4f),
+                    startAngle = (float * 57.3f) % 360f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    topLeft = Offset(c.x - orbit, c.y - orbit),
+                    size = androidx.compose.ui.geometry.Size(orbit * 2f, orbit * 2f),
+                    style = Stroke(
+                        width = 2f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 9f))
+                    )
+                )
+            }
 
             // Ripples fold inward for listening, outward for speaking.
             val ripples = if (mode == VoiceMode.IDLE) 2 else 3
