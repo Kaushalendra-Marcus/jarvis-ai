@@ -30,7 +30,7 @@ android {
         buildConfigField("String", "GEMINI_API_KEY_DEFAULT", "\"$bundledGeminiKey\"")
         buildConfigField("String", "TEST_ACCOUNT_EMAIL", "\"$testAccountEmail\"")
         buildConfigField("String", "TEST_ACCOUNT_PASSWORD", "\"${testAccountPassword.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://jarvis-backend.onrender.com\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://jarvis-backend-71nz.onrender.com\"")
         buildConfigField("String", "MEM0_API_KEY_DEFAULT", "\"$mem0ApiKeyDefault\"")
         buildConfigField("String", "MEM0_USER_ID_DEFAULT", "\"$mem0UserIdDefault\"")
         // Stable Gemini model used by every AI request. Update here only.
