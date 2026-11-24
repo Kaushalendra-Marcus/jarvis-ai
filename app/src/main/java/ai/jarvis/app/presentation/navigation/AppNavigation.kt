@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import android.net.Uri
 import ai.jarvis.app.R
 import ai.jarvis.app.presentation.agent.AgentScreen
 import ai.jarvis.app.presentation.agent.AgentViewModel
@@ -180,7 +181,13 @@ fun AppNavigation(
                     onOpenMailbox = { navController.navigate(Screen.Mailbox.route) { launchSingleTop = true } })
             }
             composable(Screen.Integrations.route) {
-                ai.jarvis.app.presentation.integrations.IntegrationsScreen(registry = integrationRegistry, onConnectGmail = onConnectGmail)
+                ai.jarvis.app.presentation.integrations.IntegrationsScreen(
+                    registry = integrationRegistry,
+                    onConnectGmail = onConnectGmail,
+                    onAuthorizeApp = { url ->
+                        navController.navigate("browser?url=${Uri.encode(url)}") { launchSingleTop = true }
+                    }
+                )
             }
             composable(Screen.Mailbox.route) {
                 ai.jarvis.app.presentation.mailbox.MailboxScreen(viewModel = mailboxViewModel,

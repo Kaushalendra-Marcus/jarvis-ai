@@ -18,8 +18,12 @@ class CustomIntegrationStore(context: Context) {
     data class SavedCustom(
         val id: String,
         val title: String,
-        val type: String, // "mcp" or "openapi"
-        val url: String
+        val type: String, // "mcp", "openapi" or "catalog"
+        val url: String,
+        /** True once the user completed the in-app authorization loop. */
+        val connected: Boolean = false,
+        /** Vendor authorization page opened by Authorize. */
+        val authUrl: String = ""
     )
 
     fun load(): List<SavedCustom> {
@@ -32,7 +36,9 @@ class CustomIntegrationStore(context: Context) {
                     id = o.getString("id"),
                     title = o.getString("title"),
                     type = o.getString("type"),
-                    url = o.getString("url")
+                    url = o.getString("url"),
+                    connected = o.optBoolean("connected", false),
+                    authUrl = o.optString("authUrl", "")
                 )
             }
         }.getOrDefault(emptyList())
@@ -47,6 +53,8 @@ class CustomIntegrationStore(context: Context) {
                     .put("title", it.title)
                     .put("type", it.type)
                     .put("url", it.url)
+                    .put("connected", it.connected)
+                    .put("authUrl", it.authUrl)
             )
         }
         prefs.edit().putString(KEY_CUSTOMS, arr.toString()).apply()
