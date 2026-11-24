@@ -285,11 +285,11 @@ fun ScheduledTaskCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = primary, modifier = Modifier.size(17.dp))
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = primary, modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(17.dp))
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = ErrorRed, modifier = Modifier.size(20.dp))
                     }
                 }
             }
