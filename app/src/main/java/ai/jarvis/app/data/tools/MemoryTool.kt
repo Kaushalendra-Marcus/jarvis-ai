@@ -79,6 +79,13 @@ class MemoryTool(
             "delete", "forget", "remove" -> when (val target = resolveSingle(arguments)) {
                 is Resolution.Found -> {
                     memoryRepository.deleteMemory(target.memory.id)
+                    // The Room row is gone; now remove its cloud twin so Mem0 recall
+                    // stops surfacing a memory the user just deleted.
+                    runCatching {
+                        val hits = semanticStore?.recall("${target.memory.key} ${target.memory.content}", 6)
+                            .orEmpty().filter { it.source == ai.jarvis.app.domain.memory.MemorySource.MEM0 }
+                        hits.forEach { semanticStore?.delete(it.id) }
+                    }
                     ToolExecutionResponse(name, true, "Memory deleted: [${target.memory.key}] ${target.memory.content}")
                 }
                 is Resolution.Problem -> failure(target.message)

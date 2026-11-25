@@ -166,8 +166,10 @@ class JarvisApplication : Application() {
         voiceManager = VoiceManager(this)
 
         // 5b. Make sure every enabled recurring task has its next run queued (also migrates old periodic jobs).
+        // Hourly memory consolidation runs on its own rhythm from Room chats.
         applicationScope.launch {
             runCatching { taskSchedulerRepository.ensureScheduled() }
+            runCatching { ai.jarvis.app.service.background.MemoryConsolidationWorker.schedule(this@JarvisApplication) }
         }
 
         // 6. Setup Notification Channels
