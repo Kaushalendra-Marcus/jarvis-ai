@@ -98,16 +98,24 @@ export function buildRawMessage({ recipient, subject, body }) {
 export function mapGmailError(error) {
   const status = Number(error?.response?.status ?? error?.code ?? error?.status ?? 0);
   const reason = String(error?.response?.data?.error?.status ?? error?.errors?.[0]?.reason ?? "");
-  // Diagnostic only: status + machine reason, never bodies or addresses.
-  // Tells missing-scope grants apart from admin blocks in production logs.
+  // Diagnostic only: machine fields, never bodies or addresses. errorReason and
+  // detail carry Google's templated codes (e.g. insufficientPermissions), which
+  // distinguish a partial grant from an account-level block in production logs.
   if (status === 401 || status === 403) {
-    console.warn("Gmail API denied", { status, reason: reason || "unknown" });
+    const firstError = error?.response?.data?.error?.errors?.[0] ?? error?.errors?.[0] ?? {};
+    console.warn("Gmail API denied", {
+      status,
+      reason: reason || "unknown",
+      errorReason: firstError.reason || "unknown",
+      detail: String(firstError.message ?? error?.message ?? "").slice(0, 160)
+    });
   }
   if (status === 401 || /invalid_grant/i.test(String(error?.message ?? ""))) {
     return Object.assign(new Error("Gmail authorization expired. Reconnect Gmail in Settings."), { status: 401 });
   }
   if (status === 403) {
-    const detail = `${reason} ${error?.message ?? ""}`;
+    const firstReason = error?.response?.data?.error?.errors?.[0]?.reason ?? error?.errors?.[0]?.reason ?? "";
+    const detail = `${reason} ${firstReason} ${error?.message ?? ""}`;
     if (/insufficient/i.test(detail)) {
       return Object.assign(
         new Error("Gmail inbox access was not granted. Disconnect and reconnect Gmail in Settings to allow reading and drafts."),
