@@ -20,3 +20,6 @@ local.properties
 .neon
 node_modules/
 .env.local
+
+# Demo recordings stay local - screenshots carry the submission
+video/*.mp4

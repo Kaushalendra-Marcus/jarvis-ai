@@ -207,6 +207,34 @@ Built with **OpenCode** powered by **Muse Spark 1.3 (contributor)**. It drafted
 scaffolding and tests. I directed the design, ran all 134 tests, verified everything
 on a real phone, and fixed each failure by hand.
 
+## Walkthrough
+
+Home orb with voice, then chat. Ask anything or pick a suggestion.
+
+<img src="docs/screenshots/01_home.png" width="270" alt="Home orb" />
+<img src="docs/screenshots/02_chat_suggestions.png" width="270" alt="Chat suggestions" />
+
+Multi step work: the agent opens the web, reads it, recalls the preferred email from
+memory, and saves a real Gmail draft. A live search returning real inbox results:
+
+<img src="docs/screenshots/03_multistep_draft.png" width="270" alt="Web plus memory plus draft" />
+<img src="docs/screenshots/04_gmail_search.png" width="270" alt="Real Gmail search results" />
+
+Memory keeps everything with 12 hour timestamps. Routines run on their own schedule:
+
+<img src="docs/screenshots/05_memory.png" width="270" alt="Memory screen" />
+<img src="docs/screenshots/06_routines.png" width="270" alt="Routines screen" />
+
+Links shows Gmail live. Mailbox connects the real inbox:
+
+<img src="docs/screenshots/07_links_live.png" width="270" alt="Links with Gmail live" />
+<img src="docs/screenshots/08_mailbox_connected.png" width="270" alt="Mailbox connected" />
+
+Four AI providers with encrypted keys, and X style settings with search:
+
+<img src="docs/screenshots/09_ai_models.png" width="270" alt="AI model providers" />
+<img src="docs/screenshots/10_settings.png" width="270" alt="Settings list" />
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
