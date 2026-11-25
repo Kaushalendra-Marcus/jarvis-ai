@@ -17,6 +17,12 @@
   <img src="https://img.shields.io/badge/Tests-134_passing-brightgreen?style=flat-square" alt="134 tests passing" />
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/iOAzHv7mw-E?si=BJlg9v9odykRwTRP"><img src="https://img.shields.io/badge/▶_Watch_the_demo-FF0000?style=for-the-badge" alt="Watch the demo" /></a>
+  &nbsp;
+  <a href="https://drive.google.com/file/d/11331xOW9vMB5u6v04-E94jG57-t3mvN0/view?usp=sharing"><img src="https://img.shields.io/badge/⬇_Download_APK-34A853?style=for-the-badge" alt="Download APK" /></a>
+</p>
+
 > This repo is my submission for the Aurviz SDE hiring assignment: a personal AI agent
 > Android app. Everything below is written from the actual code in this repo, and every
 > number in it was measured today.
@@ -69,6 +75,9 @@ The APK lands at `app/build/outputs/apk/debug/app-debug.apk` (~19 MB). Install i
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+No build tools handy? Grab the ready APK straight from Drive:
+`https://drive.google.com/file/d/11331xOW9vMB5u6v04-E94jG57-t3mvN0/view?usp=sharing`
 
 No API key ships in the APK. Paste your Gemini key in Settings, AI model (or set
 `gemini.api.key` before building). Tests:
