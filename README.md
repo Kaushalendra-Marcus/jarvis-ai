@@ -194,11 +194,9 @@ blocked Gmail API cannot connect by design (the app says so plainly).
 
 ## Built with AI, checked by a human
 
-ChatGPT, Claude family assistants, and Cursor style completion helped with scaffolding,
-boilerplate, and first draft tests. I directed every piece, compiled it, ran all 134
-tests, verified behavior on a real phone over adb (screenshots and logcat included),
-and fixed each failure by hand: the OAuth client mismatch, a stale APK mystery, scope
-bugs, and flaky timing. The understanding is mine. The volume is shared credit.
+Built with **OpenCode** powered by **Muse Spark 1.3 (contributor)**. It drafted
+scaffolding and tests. I directed the design, ran all 134 tests, verified everything
+on a real phone, and fixed each failure by hand.
 
 ## License
 
