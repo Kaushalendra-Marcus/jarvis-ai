@@ -70,7 +70,11 @@ import kotlinx.coroutines.launch
 fun IntegrationsScreen(
     registry: IntegrationRegistry,
     onConnectGmail: () -> Unit,
-    onAuthorizeApp: (String) -> Unit = {}
+    onAuthorizeApp: (String) -> Unit = {},
+    // Live backend truth: the registry's gmail flag is only a local toggle, so the
+    // real connection state is injected and always wins for the Gmail row.
+    isGmailLive: Boolean = false,
+    onDisconnectGmail: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<IntegrationDescriptor>>(emptyList()) }
@@ -84,11 +88,23 @@ fun IntegrationsScreen(
 
     fun refresh() {
         scope.launch {
-            runCatching { items = registry.descriptors() }
+            runCatching { registry.descriptors() }
+                .onSuccess { list ->
+                    items = list.map { d ->
+                        if (d.id == "gmail") {
+                            d.copy(
+                                status = if (isGmailLive) IntegrationStatus.CONNECTED
+                                else IntegrationStatus.DISCONNECTED
+                            )
+                        } else d
+                    }
+                }
                 .onFailure { error = it.message }
         }
     }
     LaunchedEffect(Unit) { refresh() }
+    // Re-evaluate the moment the backend connection flips (e.g. OAuth return).
+    LaunchedEffect(isGmailLive) { refresh() }
 
     val statusOf = { id: String -> items.find { it.id == id }?.status }
     val connectedCount = items.count { it.status == IntegrationStatus.CONNECTED }
@@ -148,7 +164,7 @@ fun IntegrationsScreen(
                     ConnectionRow(
                         d = d,
                         onConnectGmail = onConnectGmail,
-                        onDisconnectGmail = { scope.launch { registry.disconnect("gmail"); refresh() } },
+                        onDisconnectGmail = { onDisconnectGmail(); refresh() },
                         onRemove = { scope.launch { registry.removeCustom(d.id); refresh() } }
                     )
                 }
@@ -193,7 +209,7 @@ fun IntegrationsScreen(
             status = statusOf(app.id),
             onDismiss = { selected = null },
             onConnectGmail = { selected = null; onConnectGmail() },
-            onDisconnectGmail = { scope.launch { registry.disconnect("gmail"); refresh(); selected = null } },
+            onDisconnectGmail = { onDisconnectGmail(); refresh(); selected = null },
             onAuthorize = { url -> onAuthorizeApp(url) },
             onConfirmConnected = { serverUrl, token ->
                 runCatching { registry.markCatalogConnected(app.id, app.name, serverUrl.trim(), app.authUrl, token.trim()) }

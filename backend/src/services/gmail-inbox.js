@@ -98,6 +98,11 @@ export function buildRawMessage({ recipient, subject, body }) {
 export function mapGmailError(error) {
   const status = Number(error?.response?.status ?? error?.code ?? error?.status ?? 0);
   const reason = String(error?.response?.data?.error?.status ?? error?.errors?.[0]?.reason ?? "");
+  // Diagnostic only: status + machine reason, never bodies or addresses.
+  // Tells missing-scope grants apart from admin blocks in production logs.
+  if (status === 401 || status === 403) {
+    console.warn("Gmail API denied", { status, reason: reason || "unknown" });
+  }
   if (status === 401 || /invalid_grant/i.test(String(error?.message ?? ""))) {
     return Object.assign(new Error("Gmail authorization expired. Reconnect Gmail in Settings."), { status: 401 });
   }

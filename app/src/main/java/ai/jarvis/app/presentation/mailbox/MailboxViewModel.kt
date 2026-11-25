@@ -68,8 +68,13 @@ class MailboxViewModel(
                 val result = mail.search(folder.query, 15)
                 val messages = result.optJSONArray("messages")
                 val items = (0 until (messages?.length() ?: 0)).map { toItem(messages!!.getJSONObject(it)) }
-                if (_state.value.folder == folder) {
-                    _state.value = _state.value.copy(items = items, loading = false)
+                val current = _state.value
+                // Always clear loading: a folder switch mid-flight used to leave
+                // the spinner running forever on the new folder.
+                _state.value = if (current.folder == folder) {
+                    current.copy(items = items, loading = false)
+                } else {
+                    current.copy(loading = false)
                 }
             } catch (error: Exception) {
                 _state.value = _state.value.copy(loading = false, error = friendly(error))

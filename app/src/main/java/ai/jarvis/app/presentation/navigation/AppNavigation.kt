@@ -181,9 +181,12 @@ fun AppNavigation(
                     onOpenMailbox = { navController.navigate(Screen.Mailbox.route) { launchSingleTop = true } })
             }
             composable(Screen.Integrations.route) {
+                val gmailState by settingsViewModel.gmailConnectionState.collectAsState()
                 ai.jarvis.app.presentation.integrations.IntegrationsScreen(
                     registry = integrationRegistry,
                     onConnectGmail = onConnectGmail,
+                    isGmailLive = gmailState.startsWith("Connected as "),
+                    onDisconnectGmail = settingsViewModel::disconnectGmail,
                     onAuthorizeApp = { url ->
                         navController.navigate("browser?url=${Uri.encode(url)}") { launchSingleTop = true }
                     }
