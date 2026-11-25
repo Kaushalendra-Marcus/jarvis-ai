@@ -232,6 +232,14 @@ the missing address, then saves the draft without sending:
 <img src="images/screenshots_demo/mail2.png" width="270" alt="Agent asks for the missing email address" />
 <img src="images/screenshots_demo/mail1.png" width="270" alt="Draft saved to Gmail drafts" />
 
+Email in action: TechCrunch summaries drafted straight to Gmail, and news summarised
+and emailed on command:
+
+<img src="images/screenshots_demo/photo_6068844508318735350_y.jpg" width="270" alt="TechCrunch summary draft in Gmail" />
+<img src="images/screenshots_demo/photo_6068844508318735351_y.jpg" width="270" alt="Draft email to Harsh Gupta" />
+<img src="images/screenshots_demo/photo_6068844508318735352_y.jpg" width="270" alt="Summarise TechCrunch and send by email" />
+<img src="images/screenshots_demo/photo_6068844508318735353_y.jpg" width="270" alt="Hacker News summary emailed" />
+
 Memory keeps everything with 12 hour timestamps. Routines run on their own schedule:
 
 <img src="docs/screenshots/05_memory.png" width="270" alt="Memory screen" />
