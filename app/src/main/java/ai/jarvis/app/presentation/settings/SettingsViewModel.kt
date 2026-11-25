@@ -131,7 +131,23 @@ class SettingsViewModel(
     }
 
     // ---- Smart recall (Mem0) ----
-    // Backend-managed: no key UI here. Status surfaces in Memory → About you.
+    // The key lives in encrypted storage; blank means Room-only offline mode.
+    val mem0Available: StateFlow<Boolean> = securePreferences.mem0Available
+
+    fun mem0Key(): String = securePreferences.getUserMem0ApiKey()
+
+    fun updateMem0Key(key: String) {
+        try {
+            securePreferences.saveMem0ApiKey(key)
+            _storageMessage.value = if (key.isBlank()) {
+                "Smart recall key cleared. Memories stay on this device."
+            } else {
+                "Smart recall key saved in encrypted storage."
+            }
+        } catch (error: Exception) {
+            _storageMessage.value = error.message ?: "Encrypted storage is unavailable; the key was not saved."
+        }
+    }
 
     private val _apiKey = MutableStateFlow(securePreferences.getUserGeminiApiKey())
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()

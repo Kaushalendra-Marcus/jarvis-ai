@@ -73,6 +73,14 @@ fun SettingsScreen(
     }
     var emailInput by remember(currentEmail) { mutableStateOf(currentEmail) }
     var keyVisible by remember { mutableStateOf(false) }
+    var mem0KeyVisible by remember { mutableStateOf(false) }
+    val mem0Available by viewModel.mem0Available.collectAsState()
+    var mem0KeyInput by remember { mutableStateOf("") }
+    var mem0KeyLoaded by remember { mutableStateOf(false) }
+    if (!mem0KeyLoaded) {
+        mem0KeyInput = viewModel.mem0Key()
+        mem0KeyLoaded = true
+    }
     LaunchedEffect(llmProvider) {
         modelInput = viewModel.providerModel(llmProvider)
         keyInput = viewModel.providerKey(llmProvider)
@@ -85,7 +93,7 @@ fun SettingsScreen(
     var query by remember { mutableStateOf("") }
     var confirmSignOutEverywhere by remember { mutableStateOf(false) }
 
-    val destinations = remember(accountEmail, llmProvider, themeMode) {
+    val destinations = remember(accountEmail, llmProvider, themeMode, mem0Available) {
         listOf(
             SettingsDestination(
                 "account", "Account",
@@ -100,6 +108,11 @@ fun SettingsScreen(
             SettingsDestination(
                 "ai", "AI model", llmProvider.replaceFirstChar { it.uppercase() },
                 Icons.Default.AutoAwesome, "model gemini groq deepseek claude api key"
+            ),
+            SettingsDestination(
+                "recall", "Smart recall",
+                if (mem0Available) "Mem0 semantic memory on" else "On-device memory only",
+                Icons.Default.Psychology, "memory mem0 smart recall semantic"
             ),
             SettingsDestination(
                 "notifications", "Notifications",
@@ -131,7 +144,7 @@ fun SettingsScreen(
     val groups = remember(destinations) {
         listOf(
             "General" to listOf("account", "mailbox", "ai", "notifications"),
-            "Personalize" to listOf("appearance", "preferences", "performance"),
+            "Personalize" to listOf("appearance", "preferences", "performance", "recall"),
             "Support" to listOf("permissions", "about")
         ).map { (header, ids) -> header to destinations.filter { it.id in ids } }
     }
@@ -378,6 +391,18 @@ fun SettingsScreen(
                             ) { Text("Save email") }
                         }
                         "performance" -> PerformancePanel(performance, onClear = viewModel::clearPerformanceSamples)
+                        "recall" -> SmartRecallBody(
+                            available = mem0Available,
+                            keyInput = mem0KeyInput,
+                            onKeyInput = { mem0KeyInput = it },
+                            onSaveKey = {
+                                viewModel.updateMem0Key(mem0KeyInput)
+                                mem0KeyInput = viewModel.mem0Key()
+                            },
+                            keyDirty = mem0KeyInput != viewModel.mem0Key(),
+                            keyVisible = mem0KeyVisible,
+                            onToggleKeyVisible = { mem0KeyVisible = !mem0KeyVisible }
+                        )
                         "permissions" -> {
                             Text(
                                 "Microphone is only used for voice commands.",
@@ -695,6 +720,52 @@ private fun formatMs(ms: Long): String =
     if (ms < 1000) "$ms ms" else String.format(java.util.Locale.US, "%.1f s", ms / 1000.0)
 
 /** Provider cards (Gemini, Groq, DeepSeek, Claude) + model + key for the selected one. */
+@Composable
+private fun SmartRecallBody(
+    available: Boolean,
+    keyInput: String,
+    onKeyInput: (String) -> Unit,
+    onSaveKey: () -> Unit,
+    keyDirty: Boolean,
+    keyVisible: Boolean,
+    onToggleKeyVisible: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            if (available) "Smart recall is on. Saved chats shape answers beyond this phone."
+            else "Smart recall is off. Memories stay on this device until you add a key.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = onKeyInput,
+            label = { Text("Mem0 API key") },
+            placeholder = { Text("m0-...") },
+            singleLine = true,
+            visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = onToggleKeyVisible) {
+                    Icon(
+                        imageVector = if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (keyVisible) "Hide key" else "Show key"
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
+        Text(
+            "Stored encrypted on this device. Clearing the key keeps everything on-device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (keyDirty) {
+            Button(onClick = onSaveKey) { Text(if (keyInput.isBlank()) "Clear key" else "Save key") }
+        }
+    }
+}
+
 @Composable
 private fun ModelProviderPicker(
     providerId: String,
