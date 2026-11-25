@@ -3,6 +3,7 @@ package ai.jarvis.app.presentation.mailbox
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.jarvis.app.core.security.SecurePreferences
+import ai.jarvis.app.data.remote.BackendApiException
 import ai.jarvis.app.domain.mail.MailGateway
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -117,6 +118,12 @@ class MailboxViewModel(
     )
 
     private fun friendly(error: Exception): String = when {
+        // BackendApiException extends IOException, so it must be checked first:
+        // otherwise real Gmail errors masquerade as network failures.
+        error is BackendApiException && error.statusCode == 401 ->
+            "Gmail access needs to be reconnected. Open Settings, Mailbox."
+        error is BackendApiException ->
+            error.message ?: "Could not load this mailbox."
         error.message?.contains("reconnect", ignoreCase = true) == true ||
             error.message?.contains("not granted", ignoreCase = true) == true ->
             "Gmail access needs to be reconnected. Open Settings, Mailbox."
