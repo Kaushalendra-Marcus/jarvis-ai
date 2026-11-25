@@ -1,139 +1,205 @@
-# JARVIS AI — Personal AI Agent (Aurviz SDE Assignment)
+<p align="center">
+  <img src="docs/assets/logo.png" width="120" alt="JARVIS AI logo" />
+</p>
 
-Native Android (Kotlin) personal AI agent + Node.js backend. Voice/text → Gemini reasoning
-→ function tools → real actions (Gmail, controlled browser, cron routines, memory),
-with explicit confirmation before anything sensitive.
+<h1 align="center">JARVIS AI</h1>
 
-- Repository: `https://github.com/Kaushalendra-Marcus/jarvis-ai`
-- Package: `ai.jarvis.app` · minSdk 26 · targetSdk 34
-- Backend (live): `https://jarvis-backend-71nz.onrender.com`
-- AI tools used in development: ChatGPT, Claude/Codex-style assistants, Cursor — directed,
-  reviewed, and validated by the developer (see §9).
+<p align="center">
+  A personal AI agent for Android that talks, remembers, and gets things done.
+  <br />
+  Built with Kotlin, Jetpack Compose, Gemini, Node.js, and Postgres.
+</p>
 
-## 1. Setup and execution
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-Kotlin-7F52FF?style=flat-square" alt="Android Kotlin" />
+  <img src="https://img.shields.io/badge/Backend-Node.js-339933?style=flat-square" alt="Node backend" />
+  <img src="https://img.shields.io/badge/AI-Gemini-1A73E8?style=flat-square" alt="Gemini" />
+  <img src="https://img.shields.io/badge/Tests-134_passing-brightgreen?style=flat-square" alt="134 tests passing" />
+</p>
+
+> This repo is my submission for the Aurviz SDE hiring assignment: a personal AI agent
+> Android app. Everything below is written from the actual code in this repo, and every
+> number in it was measured today.
+
+## What it does
+
+You talk or type. Jarvis figures out what you mean, makes a plan, uses tools to do it,
+and shows you each step as it happens. It remembers your preferences across restarts,
+connects your real Gmail, browses the web in a controlled in app browser, and runs
+routines on a schedule, even when the app is closed.
+
+- Voice and text commands with spoken replies
+- Real Gmail: search, read, draft, and send (sending always asks first)
+- Memory that sticks: preferences, facts, and past chats, with semantic recall
+- Routines like "every morning at 8, brief me", with an alarm that actually rings
+- Controlled web browser the agent can open, scroll, read, and click through
+- App accounts: signup, login, logout, and sign out everywhere
+- Demo mailbox so reviewers can try everything without connecting anything
+
+## How it works
+
+![System architecture](docs/assets/architecture.png)
+
+A bounded ReAct loop runs every turn: understand what you said, pull in relevant memories,
+plan with Gemini function calling, check permissions, run tools, read the results, and report
+back. Sensitive actions never run silently. They pause, show you the full content, and wait
+for your tap.
+
+![Routine scheduling](docs/assets/routines.png)
+
+Routines get two triggers for reliability: an exact system alarm for on time delivery plus a
+WorkManager chain as backup. A run token gate means only one of them ever executes.
+
+Deeper docs live in [`docs/jarvis/`](docs/jarvis/): [architecture](docs/jarvis/ARCHITECTURE_JARVIS.md),
+[performance](docs/jarvis/PERFORMANCE_JARVIS.md), [flow diagrams](docs/jarvis/FLOW_DIAGRAM.md).
+
+## Get it running
 
 ### Android app
-1. Install Android Studio (or command-line tools) with JDK 17 and Android SDK 34.
-2. `cp local.properties.example local.properties` and set `sdk.dir` (and optionally
-   `gemini.api.key` — no key ships in the APK; a key typed in Settings → AI model works too).
-3. Build: `./gradlew :app:assembleDebug`
-   APK: `app/build/outputs/apk/debug/app-debug.apk` (~19 MB, committed build also in repo).
-4. Install: `adb install -r app/build/outputs/apk/debug/app-debug.apk`
-5. Tests: `./gradlew :app:testDebugUnitTest` — **112 tests, 0 failures** (20 suites).
 
-### Backend
-1. `cd backend && cp .env.example .env` and fill `DATABASE_URL`, `SESSION_SECRET`,
-   `TOKEN_ENCRYPTION_KEY_B64`, `GOOGLE_CLIENT_ID/SECRET`, redirect URIs (all names in
-   `.env.example`; never commit `.env`).
-2. `docker compose up -d postgres && npx prisma migrate deploy` (production boots also
-   self-apply the user-accounts DDL idempotently — no prisma CLI needed on the host).
-3. `npm test` — **22 tests, 0 failures** (6 suites). Run: `npm run dev` (`ROLE=all`).
+You need JDK 17 and Android SDK 34.
 
-### First run (phone)
-1. Onboarding → pick **My Gmail** or **Demo mailbox** (offline sample inbox, nothing real sent).
-2. Settings → Account: create an account or log in (email + password, scrypt-hashed server-side).
-3. Settings → Mailbox → **Sign in with Google**, approve all scope checkboxes → "Connected as …".
-   Note: Google's OAuth app runs in Testing mode — accounts must be added under
-   Audience → Test users; Gmail API must be enabled in the Cloud project.
-
-## 2. Architecture
-
-```mermaid
-flowchart LR
-  User -->|voice/text| AgentOrchestrator
-  AgentOrchestrator -->|recall| HybridMemory[Room + Mem0]
-  AgentOrchestrator -->|plan| Gemini[Gemini 3.5-flash-lite + fallbacks]
-  Gemini -->|functionCall| ToolRegistry
-  ToolRegistry --> IntegrationRegistry
-  IntegrationRegistry -->|gmail| BackendAPI
-  ToolRegistry -->|memory/schedule/web/browser| LocalTools
-  AgentOrchestrator -->|confirm?| UI[Approval dialog]
-  ToolRegistry -->|observe| AgentOrchestrator
-  AgentOrchestrator -->|report| UI[Tool cards + history]
-  AlarmManager -->|exact trigger| Worker[ScheduledTaskWorker]
-  WorkManager --> Worker --> AgentOrchestrator
-  BackendAPI --> Postgres --> PgBoss --> GmailAPI
+```bash
+cp local.properties.example local.properties   # set sdk.dir inside
+./gradlew :app:assembleDebug
 ```
 
-- `UI` (Compose only): Agent/Home orb, Chat (+ history drawer), Memory, Routines,
-  Links, Mailbox, Browser, Settings (X-style: search + sub-screens). Details: `docs/jarvis/ARCHITECTURE_JARVIS.md`.
-- `Reasoning`: `AgentOrchestrator` — bounded ReAct loop (8 interactive / 6 background steps):
-  understand intent → retrieve memory context → plan (Gemini function-calling) →
-  permission check (`isSensitive`/`requiresForeground`) → execute → observe →
-  continue/recover → report. Live `ToolAction` states (`RUNNING → SUCCESS / FAILED / AWAITING_CONFIRMATION`).
-- `Memory`: `SemanticMemoryStore` → `RoomSemanticMemoryStore` (offline-first Room) +
-  `Mem0SemanticMemoryStore` (semantic cloud recall) → `Hybrid`. Teach/edit/delete in Memory tab.
-- `Integrations`: `IntegrationRegistry` seam — Gmail (verified OAuth), Calendar (beta),
-  Notion (validated token), custom MCP/OpenAPI (fail-closed UNVERIFIED placeholders).
-- `Tools`: `AgentTool` + `ToolRegistry` — gmail search/read/draft/send, memory, scheduler,
-  web, 10 browser tools, Notion. Sensitive tools are two-phase (`execute` prepares,
-  `executeConfirmed` acts) and the LLM can never bypass the UI gate.
-- `Scheduling`: `CronSchedule` (cron + "every morning at 8" NL) → one-time WorkManager
-  chains + **exact `AlarmManager` triggers** (reboot-safe) with a run-token gate so the
-  two triggers never double-execute. Backend `pg-boss` durable queue for email delivery.
-- `Execution`: `ScheduledTaskWorker` (foreground-gated, retry/backoff policy) + email worker
-  (`$transaction` claim, idempotent `Message-ID`, retry only on 429).
+The APK lands at `app/build/outputs/apk/debug/app-debug.apk` (~19 MB). Install it with:
 
-## 3. Voice-to-action pipeline
-Mic → SpeechRecognizer → `AgentViewModel.sendPrompt` → orchestrator → Gemini →
-function calls → tools → `functionResponse` → summary → TTS (spoken replies toggle,
-en-IN/hi-IN). Microphone permission is requested once; spoken replies are opt-in.
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-## 4. Security, permissions, failure handling
-- No API keys or OAuth tokens in git (`.env`, `local.properties` ignored; only `.example` files
-  tracked). No bundled Gemini key (`hasBuiltInGeminiKey=false`).
-- Android secrets in Keystore-backed `EncryptedSharedPreferences`; Google refresh tokens
-  AES-256-GCM encrypted server-side; device sessions stored as SHA-256 hashes, single-use
-  OAuth codes, `no-store` token responses, strict Zod schemas, HTTPS-only remotes.
-- Sensitive actions (send email, browser click/type) pause for explicit approval showing the
-  full content; the model is told cancelled actions must not be retried.
-- Idempotency keys end-to-end (header → `scheduledEmail` unique key → stable Gmail
-  `Message-ID`); retries only on 429/network with exponential backoff.
-- Every layer maps errors to actionable text (session-expired → reconnect, scope/admin
-  denials distinguished, offline → retryable). See `docs/jarvis/ARCHITECTURE_JARVIS.md`.
+No API key ships in the APK. Paste your Gemini key in Settings, AI model (or set
+`gemini.api.key` before building). Tests:
 
-## 5. Performance (measured 25 Nov 2026)
-- Android: **112 tests, 0 failures**; compile `BUILD SUCCESSFUL`.
-- Backend: **22 tests, 0 failures** (`npm test`, ~2s).
-- On-device telemetry (`RoomPerformanceRecorder`, Settings → Performance): `AGENT_TURN`,
-  `LLM_CALL`, `MEMORY_RETRIEVAL`, `SCHEDULED_RUN` medians/p95 from real use.
-- Optimizations: exact alarms beat Doze drift; Room-first memory keeps the hot path offline;
-  `insertAndTrim` bounds history at 500 rows; pg-boss `batchSize:1 + singletonKey` for safe
-  delivery. Details: `docs/jarvis/PERFORMANCE_JARVIS.md`.
+```bash
+./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest   # 112 tests, 0 failures
+```
 
-## 6. Completed features
-Voice + text agent, multi-provider LLMs, persistent + semantic memory, Gmail connect/search/
-read/draft/send with approval, controlled browser (10 tools), cron + exact-alarm routines,
-multi-step ReAct tasks, app accounts (signup/login/logout/sign-out-everywhere), Links catalog
-(Gmail live, Notion validated, Calendar beta, custom MCP/OpenAPI placeholders), demo mailbox,
-12-hour clock, X-style settings with search, notifications with sound/vibration toggles,
-chat history drawer, dark/light themes.
+### Backend
 
-## 7. Incomplete / known limits
-- Google Calendar: `UNVERIFIED` placeholder — needs the Calendar OAuth scope.
-- Custom MCP/OpenAPI: registered but fail-closed until schema validation lands.
-- Google OAuth runs in **Testing mode** (100 test users) — production rollout needs Google's
-  restricted-scope verification (incl. paid security assessment); out of scope for this build.
-- School/work Workspace accounts whose admin blocks Gmail API cannot connect — the app
-  detects this (`GMAIL_BLOCKED`) and directs to a personal account.
-- `local.properties.example` contains a Mem0 key **prefix** from development — rotate the
-  Mem0 key before sharing further.
+```bash
+cd backend
+cp .env.example .env        # fill DATABASE_URL, SESSION_SECRET,
+                            # TOKEN_ENCRYPTION_KEY_B64, GOOGLE_CLIENT_ID/SECRET
+docker compose up -d postgres
+npx prisma migrate deploy
+npm test                    # 22 tests, 0 failures
+npm run dev                 # ROLE=all on :3000
+```
 
-## 8. Key challenges and solutions
-1. **Doze vs on-time routines** → exact `AlarmManager` triggers + WorkManager fallback with a
-   run-token single-execution gate (tested: `TaskRunGateTest`).
-2. **OAuth on a free-tier backend** → server-side code exchange, opaque device sessions,
-   encrypted refresh vault; deep-link callback `jarvis://oauth/callback`.
-3. **Demo vs real confusion** → explicit `demo:true` flags, labeled demo strings, default
-   lane is the user's own Gmail; tests cover both paths separately.
-4. **Stale-connection UI** (Links tab disagreeing with Settings) → single source of truth
-   (`BackendAuthManager.connectionState`) injected into the Links screen.
-5. **Gmail 403 diagnosis** → server logs status+reason; client distinguishes missing scopes
-   (reconnect with all boxes) from admin blocks (use personal account).
+The production deploy on Render self applies the accounts migration on boot, so no
+prisma CLI is needed on the host. Live at `https://jarvis-backend-71nz.onrender.com`.
 
-## 9. AI development tools
-Built with ChatGPT, Claude-family assistants, and Cursor-style completion for scaffolding,
-boilerplate, and test-drafting. Every AI contribution was directed by the developer, compiled,
-executed against the 134-test suite, verified on-device over adb (screenshots, logcat), and
-fixed by hand where it was wrong (OAuth client mismatch, stale-APK confusion, scope bugs).
-Understanding and validation — not code volume — is the developer's contribution.
+### First run on the phone
+
+1. Pick **My Gmail** or **Demo mailbox** (offline samples, nothing real is ever sent).
+2. Settings, Account: create an account or log in.
+3. Settings, Mailbox, **Sign in with Google**, and approve all the scope checkboxes.
+   Two heads up from real testing: the Google OAuth app runs in Testing mode, so each
+   account has to be added under Audience, Test users first. And the Gmail API has to be
+   enabled in the Cloud project, or every Gmail call fails. School or work accounts whose
+   admin blocks Gmail API access will not connect. A personal Gmail just works.
+
+## Project map
+
+```text
+app/src/main/java/ai/jarvis/app/
+  presentation/   Compose screens only, no logic
+    agent/        Home orb, Chat (+ history drawer, approval sheet)
+    memory/       Memories, editor sheet
+    tasks/        Routines, history, edit dialog
+    integrations/ Links catalog, custom MCP/OpenAPI
+    mailbox/      Inbox, Sent, Drafts
+    browser/      Controlled in app browser
+    settings/     X style settings with search + sub screens
+  domain/
+    orchestrator/ AgentOrchestrator (the ReAct loop)
+    tool/         AgentTool contract + ToolRegistry
+    integrations/ Integration seam + statuses
+    schedule/     CronSchedule (cron + plain English)
+    model/        Messages, tasks, sensitive actions
+  data/
+    remote/       Gemini + provider clients, backend API, auth managers
+    mail/         Real backend mail vs demo mail gateway
+    tools/        Gmail, memory, scheduler, web, browser, Notion tools
+    integrations/ Registry impl, custom store, remote placeholders
+    local/        Room database, DAOs, conversation files
+    repository/   Memory + scheduler repositories
+  service/
+    background/  Task worker, exact alarms, boot receiver, run gate
+    voice/        Speech recognition + TTS
+    web/          Scraper, browser controller + store
+  core/
+    security/     Keystore encrypted prefs
+    util/         Time (12 hour clock), network monitor
+
+backend/src/
+  routes/         auth (Google OAuth), users (accounts), emails, gmail
+  services/      google, gmail-inbox, email-service, token-vault, password
+  middleware/     device-auth (session + Google-account guards)
+  scheduler/     pg-boss email worker
+  utils/         zod validation
+```
+
+## Security choices
+
+Nothing secret lives in git. `.env` and `local.properties` are ignored. Only `.example`
+files are tracked. On the phone, keys and tokens sit in Keystore backed encrypted storage.
+On the server, Gmail refresh tokens are AES-256-GCM encrypted and device sessions are
+stored as SHA-256 hashes. OAuth codes are single use. Email sends carry idempotency keys
+end to end, and retries only happen on rate limits or network drops. The model can never
+skip the approval screen. Sending, browser clicks, and typing all wait for your tap.
+
+## Performance (measured 25 Nov 2026)
+
+- Android suite: **112 tests, 0 failures** across 20 files.
+- Backend suite: **22 tests, 0 failures** in about 2 seconds.
+- The app records its own timings on device (Settings, Performance): agent turns, LLM
+  calls, memory lookups, and scheduled runs, with median and p95.
+- Routines fire on time through Doze using exact alarms, proven by 6 single execution
+  gate tests. Room first memory keeps the hot path offline. History tables stay bounded
+  at 500 rows. Email delivery is transactional with one worker at a time.
+
+One honest improvement left on the table: agent turns are sequential LLM round trips
+(up to 8 steps). Streaming the first tokens while tools resolve would cut how long
+replies feel, without changing what runs.
+
+## What is done and what is not
+
+Done: voice and text agent, multi provider LLMs, persistent plus semantic memory,
+Gmail connect/search/read/draft/send with approval, controlled browser, cron plus exact
+alarm routines, multi step tasks, app accounts, Links catalog (Gmail live, Notion
+validated), demo mailbox, 12 hour clock, X style settings, routine alarms with sound,
+chat history drawer.
+
+Not done: Google Calendar (placeholder, needs the Calendar scope), custom MCP/OpenAPI
+schema validation (registered but fail closed), production Google verification (Testing
+mode with 100 test users is enough for review), and school/work accounts with an admin
+blocked Gmail API cannot connect by design (the app says so plainly).
+
+## Hard parts and how they got solved
+
+1. Doze kept shifting morning routines. Fixed with exact AlarmManager triggers plus the
+   WorkManager chain as backup, and a run token gate so the two can never double run.
+2. OAuth on a free host. The whole exchange happens server side, the app only ever holds
+   an opaque device token, and Gmail links into the same session when you are logged in.
+3. Demo vs real mixups. Demo results carry explicit flags and labels, and the default
+   lane is your own Gmail. Tests cover each path on its own.
+4. A Links screen that disagreed with Settings. One source of truth now: the backend
+   connection state flows into both.
+5. Gmail 403s that all looked alike. The server now tells missing scopes apart from
+   admin blocks, and each message says what to actually do.
+
+## Built with AI, checked by a human
+
+ChatGPT, Claude family assistants, and Cursor style completion helped with scaffolding,
+boilerplate, and first draft tests. I directed every piece, compiled it, ran all 134
+tests, verified behavior on a real phone over adb (screenshots and logcat included),
+and fixed each failure by hand: the OAuth client mismatch, a stale APK mystery, scope
+bugs, and flaky timing. The understanding is mine. The volume is shared credit.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

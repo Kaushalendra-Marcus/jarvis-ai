@@ -1,4 +1,4 @@
-# JARVIS AI — Flow diagrams (paste into Eraser)
+# JARVIS AI Flow diagrams (paste into Eraser)
 
 How to use: copy ONE mermaid block below → open your Eraser workspace →
 new diagram → paste the code into Eraser's AI chat (or https://www.eraser.io/ai/mermaid-diagram-editor)

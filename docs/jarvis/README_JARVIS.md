@@ -1,4 +1,4 @@
-# JARVIS AI — Just A Rather Very Intelligent System
+# JARVIS AI Just A Rather Very Intelligent System
 
 Premium personal AI agent for Android + Node.js backend. Voice/text → reasoning → tools → completion.
 
@@ -14,18 +14,18 @@ Premium personal AI agent for Android + Node.js backend. Voice/text → reasonin
 
 ## Quick start
 ### Android
-1. `cp local.properties.example local.properties` — set `sdk.dir` (optional `gemini.api.key`;
+1. `cp local.properties.example local.properties`, set `sdk.dir` (optional `gemini.api.key`;
    no key ships in the APK, and Settings → AI model accepts one anytime).
 2. `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk` (~19 MB).
-3. `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest` — **112 tests, 0 failures**
+3. `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`, **112 tests, 0 failures**
    (certified 25 Nov 2026).
 
 ### Backend
-1. `cd backend && cp .env.example .env` — fill `DATABASE_URL`, `SESSION_SECRET`,
+1. `cd backend && cp .env.example .env`, fill `DATABASE_URL`, `SESSION_SECRET`,
    `TOKEN_ENCRYPTION_KEY_B64`, `GOOGLE_CLIENT_ID/SECRET`, redirect URIs.
 2. `docker compose up -d postgres && npx prisma migrate deploy`
    (production boots self-apply the accounts DDL; no CLI needed on the host).
-3. `npm test` — **22 tests, 0 failures** (certified 25 Nov 2026). Run: `npm run dev`.
+3. `npm test`, **22 tests, 0 failures** (certified 25 Nov 2026). Run: `npm run dev`.
 
 ## First run (phone)
 1. Onboarding → **My Gmail** or **Demo mailbox** (offline samples, nothing real sent).
@@ -45,6 +45,6 @@ Premium personal AI agent for Android + Node.js backend. Voice/text → reasonin
 ## Incomplete / future
 - Google Calendar: `UNVERIFIED` placeholder, needs the Calendar OAuth scope.
 - Custom MCP/OpenAPI: registered but fail-closed until schema validation lands.
-- Google OAuth Testing mode (100 test users) — production needs restricted-scope verification.
+- Google OAuth Testing mode (100 test users), production needs restricted-scope verification.
 - School/work Workspace accounts with admin-blocked Gmail API cannot connect by design;
   the app detects this (`GMAIL_BLOCKED`) and suggests a personal account.

@@ -1,17 +1,17 @@
-# JARVIS AI — Architecture (25 Nov 2026)
+# JARVIS AI Architecture (25 Nov 2026)
 
 Entry point: [`README.md`](../../README.md). Numbers below are certified today:
 Android **112 tests / 0 failures** (20 suites), backend **22 / 0** (6 suites).
 
 ## Modules (deep, testable seams)
 - `UI`: Agent/Home orb, Chat (+ history drawer), Memory, Routines, Links, Mailbox,
-  Controlled browser, Settings (X-style: search + sub-screens) — Compose only, no logic.
+  Controlled browser, Settings (X-style: search + sub-screens), Compose only, no logic.
 - `Reasoning`: `AgentOrchestrator` (bounded ReAct: 8 interactive / 6 background steps) +
   `ProviderAgentClient` → `GeminiAgentClient` (REST, model fallback chain) for Gemini, Groq,
   DeepSeek, Claude dialects normalized to one response shape.
 - `Memory`: `SemanticMemoryStore` → `RoomSemanticMemoryStore` (offline Room, source of truth)
   + `Mem0SemanticMemoryStore` (cloud semantic recall) → `HybridSemanticMemoryStore`.
-- `Integrations`: `IntegrationRegistry` → `IntegrationRegistryImpl` — Gmail verified,
+- `Integrations`: `IntegrationRegistry` → `IntegrationRegistryImpl`, Gmail verified,
   Notion token-validated, Calendar `UNVERIFIED`, custom MCP/OpenAPI fail-closed.
 - `Tools`: `AgentTool` (`isSensitive`, two-phase `execute`/`executeConfirmed`) + `ToolRegistry`
   (gmail search/read/draft/send, memory, scheduler, web, 10 browser tools, Notion).
@@ -55,7 +55,7 @@ TTS spoken reply (opt-in switch, en-IN/hi-IN). Voice errors clear after ~2.6s, n
 Writes: agent `MemoryTool` / "Teach Jarvis" FAB / editor sheet → Room (`MemoryDao`).
 Reads: keyword + semantic recall merged per turn (`HybridSemanticMemoryStore`), quoted back
 in answers ("Used from memory: …"). Deletes/edits propagate immediately; overflow (•••)
-menus keep rows clean. Mem0 key optional — blank means Room-only offline mode.
+menus keep rows clean. Mem0 key optional, blank means Room-only offline mode.
 
 ## Scheduling and background execution
 `SchedulerTool` parses NL/cron → `scheduleTask` computes `nextRunEpoch`, enqueues a
@@ -79,5 +79,5 @@ HTTPS-only remotes, rate-limited auth endpoints, no token/email logging.
 3. Demo mailbox alongside real Gmail: reviewers evaluate without credentials; explicit
    `demo:true` flags and labels prevent either path masquerading as the other.
 4. Google OAuth stays in Testing mode (100 test users): production rollout needs Google's
-   restricted-scope verification (paid assessment) — out of scope; documented in README.
-5. Deployed backend self-applies the accounts DDL idempotently — no prisma CLI on the host.
+   restricted-scope verification (paid assessment), out of scope; documented in README.
+5. Deployed backend self-applies the accounts DDL idempotently, no prisma CLI on the host.
