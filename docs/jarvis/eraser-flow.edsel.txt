@@ -1,0 +1,19 @@
+direction: right
+
+User [shape: oval, icon: user] > UI [icon: mobile]: voice/text
+UI [label: "Compose UI\nHome Chat Memory\nRoutines Links Mailbox"] > ORCH [icon: cpu]: prompt
+ORCH [label: "AgentOrchestrator\nReAct, max 8 steps"] > MEM [icon: database]: recall
+ORCH > LLM [icon: sparkles]: plan
+LLM [label: "Gemini 3.5-flash-lite\n+ Groq/DeepSeek/Claude"] > TOOLS [icon: wrench]: functionCall
+TOOLS [label: "ToolRegistry\ngmail, memory, scheduler\nweb, browser x10, Notion"] > GATE [shape: diamond]: sensitive?
+GATE > APPROVE [icon: shield]: yes
+APPROVE [label: "Approval dialog\nshows full content"] > EXEC [icon: play]: approved
+GATE > EXEC: no
+EXEC [label: "executeConfirmed"] > OBS [icon: eye]: result
+OBS > ORCH: observe
+ORCH > REPLY [icon: message]: summary
+REPLY > User: tool cards
+
+TOOLS > API [icon: cloud]: Gmail calls
+API [label: "Backend API on Render\nPostgres + pg-boss queue"] > GMAIL [icon: mail]: send/list/read
+API > OAUTH [icon: lock]: OAuth consent + code exchange

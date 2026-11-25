@@ -1,0 +1,22 @@
+direction: down
+
+User [shape: oval, icon: user] > App [icon: mobile]: Settings → Sign in
+App > Backend [icon: cloud]: GET /auth/google
+Backend [label: "Backend API on Render"] > Google [icon: google]: OAuth consent\nopenid email gmail scopes
+Google > User: approve scopes
+Google > Backend: code → /callback
+Backend > Backend [label: "exchange code\nAES-encrypt refresh token"]: store grant
+Backend > App: jarvis://oauth/callback\none-time code
+App > Backend: POST /exchange\n(+linkToken if logged in)
+Backend > App: device session token
+App > User: Connected as you@gmail.com
+User [shape: oval, icon: user] > Agent [icon: sparkles]: Send mail to X about Y
+Agent [label: "Orchestrator + Gemini\nfunctionCall send_email"] > Dialog [icon: shield]: preflight shows\nrecipient subject body
+Dialog [label: "Approval dialog"] > User: approve?
+User > Dialog: Send
+Dialog > Backend: POST /emails/send\n+ Idempotency-Key
+Backend > Queue [icon: layers]: dedupe by key\nenqueue pg-boss
+Queue > GmailAPI [icon: mail]: messages.send\nstable Message-ID
+GmailAPI > Backend: SENT
+Backend > App: 202 queued for sending
+App > User: SUCCESS tool card + summary
