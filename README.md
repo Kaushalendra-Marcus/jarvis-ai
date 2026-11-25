@@ -115,41 +115,41 @@ prisma CLI is needed on the host. Live at `https://jarvis-backend-71nz.onrender.
 
 ```text
 app/src/main/java/ai/jarvis/app/
-  presentation/   Compose screens only, no logic
-    agent/        Home orb, Chat (+ history drawer, approval sheet)
-    memory/       Memories, editor sheet
-    tasks/        Routines, history, edit dialog
-    integrations/ Links catalog, custom MCP/OpenAPI
-    mailbox/      Inbox, Sent, Drafts
-    browser/      Controlled in app browser
-    settings/     X style settings with search + sub screens
-  domain/
-    orchestrator/ AgentOrchestrator (the ReAct loop)
-    tool/         AgentTool contract + ToolRegistry
-    integrations/ Integration seam + statuses
-    schedule/     CronSchedule (cron + plain English)
-    model/        Messages, tasks, sensitive actions
-  data/
-    remote/       Gemini + provider clients, backend API, auth managers
-    mail/         Real backend mail vs demo mail gateway
-    tools/        Gmail, memory, scheduler, web, browser, Notion tools
-    integrations/ Registry impl, custom store, remote placeholders
-    local/        Room database, DAOs, conversation files
-    repository/   Memory + scheduler repositories
-  service/
-    background/  Task worker, exact alarms, boot receiver, run gate
-    voice/        Speech recognition + TTS
-    web/          Scraper, browser controller + store
-  core/
-    security/     Keystore encrypted prefs
-    util/         Time (12 hour clock), network monitor
+├── presentation/      Compose screens only, no logic
+│   ├── agent/         Home orb, Chat (+ history drawer, approval sheet)
+│   ├── memory/        Memories, editor sheet
+│   ├── tasks/         Routines, history, edit dialog
+│   ├── integrations/  Links catalog, custom MCP/OpenAPI
+│   ├── mailbox/       Inbox, Sent, Drafts
+│   ├── browser/       Controlled in app browser
+│   └── settings/      X style settings with search + sub screens
+├── domain/
+│   ├── orchestrator/  AgentOrchestrator (the ReAct loop)
+│   ├── tool/          AgentTool contract + ToolRegistry
+│   ├── integrations/  Integration seam + statuses
+│   ├── schedule/      CronSchedule (cron + plain English)
+│   └── model/         Messages, tasks, sensitive actions
+├── data/
+│   ├── remote/        Gemini + provider clients, backend API, auth managers
+│   ├── mail/          Real backend mail vs demo mail gateway
+│   ├── tools/         Gmail, memory, scheduler, web, browser, Notion tools
+│   ├── integrations/  Registry impl, custom store, remote placeholders
+│   ├── local/         Room database, DAOs, conversation files
+│   └── repository/    Memory + scheduler repositories
+├── service/
+│   ├── background/    Task worker, exact alarms, boot receiver, run gate
+│   ├── voice/         Speech recognition + TTS
+│   └── web/           Scraper, browser controller + store
+└── core/
+    ├── security/      Keystore encrypted prefs
+    └── util/          Time (12 hour clock), network monitor
 
 backend/src/
-  routes/         auth (Google OAuth), users (accounts), emails, gmail
-  services/      google, gmail-inbox, email-service, token-vault, password
-  middleware/     device-auth (session + Google-account guards)
-  scheduler/     pg-boss email worker
-  utils/         zod validation
+├── routes/          auth (Google OAuth), users (accounts), emails, gmail
+├── services/        google, gmail-inbox, email-service, token-vault, password
+├── middleware/      device-auth (session + Google-account guards)
+├── scheduler/       pg-boss email worker
+└── utils/           zod validation
 ```
 
 ## Security choices
@@ -194,11 +194,17 @@ blocked Gmail API cannot connect by design (the app says so plainly).
    WorkManager chain as backup, and a run token gate so the two can never double run.
 2. OAuth on a free host. The whole exchange happens server side, the app only ever holds
    an opaque device token, and Gmail links into the same session when you are logged in.
-3. Demo vs real mixups. Demo results carry explicit flags and labels, and the default
-   lane is your own Gmail. Tests cover each path on its own.
-4. A Links screen that disagreed with Settings. One source of truth now: the backend
+3. Personal memory for the specific user. Memories must belong to the signed in user
+   only and never leak across accounts. Room rows are per install, Mem0 calls carry a
+   per user id, and encrypted prefs are keyed per user, so one person's facts can never
+   surface in another person's chat.
+4. MCP addition tokens authorisation. Custom MCP and OpenAPI integrations bring their
+   own user tokens, so the registry reads each token live from its connected catalog
+   entry instead of caching it. Revoking on the provider side cuts access immediately,
+   and unregistered tools stay fail closed.
+5. A Links screen that disagreed with Settings. One source of truth now: the backend
    connection state flows into both.
-5. Gmail 403s that all looked alike. The server now tells missing scopes apart from
+6. Gmail 403s that all looked alike. The server now tells missing scopes apart from
    admin blocks, and each message says what to actually do.
 
 ## Built with AI, checked by a human
@@ -219,6 +225,12 @@ memory, and saves a real Gmail draft. A live search returning real inbox results
 
 <img src="docs/screenshots/03_multistep_draft.png" width="270" alt="Web plus memory plus draft" />
 <img src="docs/screenshots/04_gmail_search.png" width="270" alt="Real Gmail search results" />
+
+A real run: asked to draft an email, the agent searches Gmail, checks memory, asks for
+the missing address, then saves the draft without sending:
+
+<img src="images/screenshots_demo/mail2.png" width="270" alt="Agent asks for the missing email address" />
+<img src="images/screenshots_demo/mail1.png" width="270" alt="Draft saved to Gmail drafts" />
 
 Memory keeps everything with 12 hour timestamps. Routines run on their own schedule:
 
