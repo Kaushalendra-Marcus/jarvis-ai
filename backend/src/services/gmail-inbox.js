@@ -106,10 +106,19 @@ export function mapGmailError(error) {
   if (status === 401 || /invalid_grant/i.test(String(error?.message ?? ""))) {
     return Object.assign(new Error("Gmail authorization expired. Reconnect Gmail in Settings."), { status: 401 });
   }
-  if (status === 403 && /PERMISSION|insufficient/i.test(reason + String(error?.message ?? ""))) {
+  if (status === 403) {
+    const detail = `${reason} ${error?.message ?? ""}`;
+    if (/insufficient/i.test(detail)) {
+      return Object.assign(
+        new Error("Gmail inbox access was not granted. Disconnect and reconnect Gmail in Settings to allow reading and drafts."),
+        { status: 403, code: "INSUFFICIENT_SCOPE" }
+      );
+    }
+    // No missing-scope signal: Google refused the account itself. The common cause
+    // is a school/work Workspace admin blocking third-party Gmail API access.
     return Object.assign(
-      new Error("Gmail inbox access was not granted. Disconnect and reconnect Gmail in Settings to allow reading and drafts."),
-      { status: 403, code: "INSUFFICIENT_SCOPE" }
+      new Error("Google refused Gmail access for this account. School or work accounts are often blocked by their admin — try a personal @gmail.com account instead."),
+      { status: 403, code: "GMAIL_BLOCKED" }
     );
   }
   if (status === 404) return Object.assign(new Error("That email was not found."), { status: 404 });

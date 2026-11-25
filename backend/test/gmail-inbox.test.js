@@ -56,7 +56,8 @@ test("buildRawMessage encodes non-ASCII subjects and rejects header injection", 
 });
 
 test("mapGmailError identifies missing scopes, expiry and outages", () => {
-  assert.equal(mapGmailError({ response: { status: 403, data: { error: { status: "PERMISSION_DENIED" } } } }).code, "INSUFFICIENT_SCOPE");
+  assert.equal(mapGmailError({ response: { status: 403, data: { error: { status: "PERMISSION_DENIED" } } } }).code, "GMAIL_BLOCKED");
+  assert.equal(mapGmailError({ message: "Request had insufficient authentication scopes.", response: { status: 403, data: { error: { status: "PERMISSION_DENIED" } } } }).code, "INSUFFICIENT_SCOPE");
   assert.equal(mapGmailError({ message: "invalid_grant" }).status, 401);
   assert.equal(mapGmailError({ response: { status: 500 } }).status, 503);
   assert.equal(mapGmailError({ response: { status: 429 } }).status, 429);
