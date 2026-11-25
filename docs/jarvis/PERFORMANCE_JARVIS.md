@@ -1,4 +1,4 @@
-# JARVIS AI — Performance (measured 25 Nov 2026)
+# JARVIS AI Performance (measured 25 Nov 2026)
 
 ## Automated suites (certified today)
 - Android: **112 tests, 0 failures, 0 errors** (20 suites,
@@ -22,13 +22,13 @@
 and 429-only retries; Render logs carry Gmail denial codes for scope diagnosis.
 
 ## Optimizations landed
-1. Exact `AlarmManager` triggers + WorkManager fallback with run-token gate — routines fire
+1. Exact `AlarmManager` triggers + WorkManager fallback with run-token gate, routines fire
    on time through Doze with zero double-runs (measured by `TaskRunGateTest`, 6 cases).
 2. Room-first hybrid memory: semantic cloud recall never blocks the hot path; blank Mem0
    key means fully offline mode.
 3. `applicationScope(SupervisorJob + IO)` instead of `GlobalScope`; cancelled on terminate.
-4. `TaskExecutionDao.insertAndTrim` in one transaction — history bounded at 500 rows.
-5. pg-boss `batchSize:1 + singletonKey + $transaction` claim — safe delivery; scale by sharding.
+4. `TaskExecutionDao.insertAndTrim` in one transaction, history bounded at 500 rows.
+5. pg-boss `batchSize:1 + singletonKey + $transaction` claim, safe delivery; scale by sharding.
 6. Timezone-aware 12-hour formatters refresh the device zone per call (fixed a test-env bug
    where static formatters froze the zone at class-load).
 7. Auth endpoints rate-limited (30/15min) separately from the global 120/min limiter.
