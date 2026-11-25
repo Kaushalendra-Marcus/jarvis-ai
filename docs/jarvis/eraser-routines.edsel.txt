@@ -1,14 +1,11 @@
 direction: down
 
-User [shape: oval, icon: user] > App [icon: mobile]: Every morning at 8, brief me
-App > Parser [icon: clock]: CronSchedule.parse\nnext run epoch + token
-Parser > WM [icon: refresh]: one-time chain\nfallback path
-Parser > Alarm [icon: bell]: setExactAndAllowWhileIdle\non-time path
-Alarm > WM: fires → enqueue KEEP\nfills gaps only
-WM > Worker [icon: cpu]: run with token
-Worker [label: "ScheduledTaskWorker"] > Gate [shape: diamond]: TaskRunGate.claim?
-Gate > Agent [icon: sparkles]: winner runs\nreads + drafts allowed\nsend blocked
-Gate > Done [shape: oval]: loser exits quietly
-Agent > Notify [icon: bell]: HIGH channel\nalarm sound + vibration
-Notify > User: summary notification
-Worker > Next [icon: calendar]: scheduleNextRun\nfailure → release + backoff retry
+User > App: every morning at 8
+App > Schedule: parse time
+Schedule > Alarm: exact trigger
+Schedule > Worker: fallback chain
+Alarm > Worker: fire on time
+Worker > Gate: first wins
+Gate > Agent: run routine
+Agent > User: alarm + summary
+Worker > Schedule: queue next run
